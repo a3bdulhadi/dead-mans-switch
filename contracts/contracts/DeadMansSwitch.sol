@@ -28,6 +28,13 @@ contract DeadMansSwitch {
         released = false;
     }
 
+    // Store the keccak256 hash of the encrypted evidence file (Synopsis Section 5.3)
+    function registerEvidence(bytes32 _evidenceHash) external onlyOwner {
+        require(!released, "Already released");
+        require(_evidenceHash != bytes32(0), "Invalid evidence hash");
+        evidenceHash = _evidenceHash;
+    }
+
     // 4-rule stage function from Synopsis Section 5.3
     function getStage() public view returns (Stage) {
         // Rule 1: If release has already been finalized, stage is RELEASED
@@ -51,10 +58,17 @@ contract DeadMansSwitch {
         }
     }
 
-    // Temporary helper so Day 3 tests can simulate a check-in
-    // (Will be upgraded to EIP-712 signed check-ins in Week 2)
+    // Check-in helper (will be upgraded to EIP-712 signed check-ins in Week 2)
     function ping() external onlyOwner {
-        require(!released, "Already released");
+        // Reject check-ins if already latched OR if 5 days have already elapsed
+        require(!released && getStage() != Stage.RELEASED, "Switch already released");
         lastCheckIn = block.timestamp;
+    }
+
+    // Permanent release latch called at Day 5+ (Synopsis Section 5.3)
+    function finalizeRelease() external {
+        require(!released, "Already latched");
+        require(block.timestamp - lastCheckIn >= RELEASE_THRESHOLD, "Release threshold not reached");
+        released = true;
     }
 }
