@@ -12,6 +12,20 @@
   <main>
     <h1>Dead Man's Switch</h1>
     <p id="status">Loading...</p>
+
+    <section class="card">
+      <label for="fileInput" class="label">Select evidence file</label>
+      <input type="file" id="fileInput" />
+      <button id="encryptBtn" type="button">Encrypt &amp; Download</button>
+
+      <div id="resultBox" class="result hidden">
+        <p class="result-label">Encrypted File keccak256 Hash</p>
+        <code id="hashOutput"></code>
+
+        <p class="result-label">One-Time AES Key (Base64 — for testing)</p>
+        <code id="keyOutput"></code>
+      </div>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
