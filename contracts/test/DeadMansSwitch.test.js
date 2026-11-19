@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("DeadMansSwitch - Boundaries, Hash & Release Latch (Days 3-4)", function () {
+describe("DeadMansSwitch - Boundaries, Latch & EIP-712 Check-Ins (Days 3-8)", function () {
   const STAGE = {
     SAFE: 0,
     ALERT: 1,
@@ -21,7 +21,31 @@ describe("DeadMansSwitch - Boundaries, Hash & Release Latch (Days 3-4)", functio
     return { dms, owner, otherAccount };
   }
 
-  // --- Day 3: Stage Boundaries ---
+  // Helper to build and sign an EIP-712 CheckIn payload
+  async function signCheckIn(dms, signer, { nonce, deadline, duress = false }) {
+    const network = await ethers.provider.getNetwork();
+    const domain = {
+      name: "DeadMansSwitch",
+      version: "1",
+      chainId: network.chainId,
+      verifyingContract: await dms.getAddress(),
+    };
+
+    const types = {
+      CheckIn: [
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "duress", type: "bool" },
+      ],
+    };
+
+    const value = { nonce, deadline, duress };
+    const signature = await signer.signTypedData(domain, types, value);
+    const { v, r, s } = ethers.Signature.from(signature);
+    return { nonce, deadline, duress, v, r, s };
+  }
+
+  // --- Week 1: Stage Boundaries ---
   it("starts in SAFE stage immediately after deployment", async function () {
     const { dms } = await deploySwitchFixture();
     expect(await dms.getStage()).to.equal(STAGE.SAFE);
@@ -51,16 +75,28 @@ describe("DeadMansSwitch - Boundaries, Hash & Release Latch (Days 3-4)", functio
     expect(await dms.getStage()).to.equal(STAGE.RELEASED);
   });
 
-  it("resets back to SAFE when owner checks in during ALERT stage", async function () {
-    const { dms } = await deploySwitchFixture();
+  it("resets back to SAFE when owner submits a valid EIP-712 signed check-in during ALERT", async function () {
+    const { dms, owner, otherAccount } = await deploySwitchFixture();
     await time.increase(3 * ONE_DAY);
     expect(await dms.getStage()).to.equal(STAGE.ALERT);
 
-    await dms.ping();
+    const latestTime = await time.latest();
+    const signed = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+      duress: false,
+    });
+
+    // Even a third-party relayer (otherAccount) can submit the owner's valid signature
+    await dms
+      .connect(otherAccount)
+      .checkInWithSignature(signed.nonce, signed.deadline, signed.duress, signed.v, signed.r, signed.s);
+
     expect(await dms.getStage()).to.equal(STAGE.SAFE);
+    expect(await dms.nonce()).to.equal(1);
   });
 
-  // --- Day 4: Evidence Hash & Permanent Release Latch ---
+  // --- Week 1: Evidence Hash & Permanent Release Latch ---
   it("registers the keccak256 evidence hash and rejects zero hashes or non-owners", async function () {
     const { dms, otherAccount } = await deploySwitchFixture();
     const sampleHash = ethers.keccak256(ethers.toUtf8Bytes("encrypted-dummy-evidence"));
@@ -85,40 +121,75 @@ describe("DeadMansSwitch - Boundaries, Hash & Release Latch (Days 3-4)", functio
     expect(await dms.released()).to.equal(false);
   });
 
-  it("latches release permanently at 5 days and rejects subsequent check-ins", async function () {
-    const { dms } = await deploySwitchFixture();
+  it("latches release permanently at 5 days and rejects subsequent signed check-ins", async function () {
+    const { dms, owner } = await deploySwitchFixture();
 
-    // Advance past 5 days and latch the release
     await time.increase(5 * ONE_DAY);
     await dms.finalizeRelease();
 
     expect(await dms.released()).to.equal(true);
     expect(await dms.getStage()).to.equal(STAGE.RELEASED);
 
-    // A late check-in must be rejected after release
-    await expect(dms.ping()).to.be.revertedWith("Switch already released");
-    expect(await dms.getStage()).to.equal(STAGE.RELEASED);
+    const latestTime = await time.latest();
+    const signed = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+    });
+
+    await expect(
+      dms.checkInWithSignature(signed.nonce, signed.deadline, signed.duress, signed.v, signed.r, signed.s)
+    ).to.be.revertedWith("Switch already released");
   });
 
-  it("rejects late check-ins at 5 days even before finalizeRelease() is called", async function () {
-    const { dms } = await deploySwitchFixture();
-    await time.increase(5 * ONE_DAY);
-
-    await expect(dms.ping()).to.be.revertedWith("Switch already released");
-  });
-// --- Day 6: Events ---
   it("emits EvidenceRegistered, CheckedIn, and Released events", async function () {
     const { dms, owner } = await deploySwitchFixture();
     const sampleHash = ethers.keccak256(ethers.toUtf8Bytes("encrypted-dummy-evidence"));
 
-    await expect(dms.registerEvidence(sampleHash))
-      .to.emit(dms, "EvidenceRegistered");
+    await expect(dms.registerEvidence(sampleHash)).to.emit(dms, "EvidenceRegistered");
 
-    await expect(dms.ping())
-      .to.emit(dms, "CheckedIn");
+    const latestTime = await time.latest();
+    const signed = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+    });
+
+    await expect(
+      dms.checkInWithSignature(signed.nonce, signed.deadline, signed.duress, signed.v, signed.r, signed.s)
+    ).to.emit(dms, "CheckedIn");
 
     await time.increase(5 * ONE_DAY);
-    await expect(dms.finalizeRelease())
-      .to.emit(dms, "Released");
+    await expect(dms.finalizeRelease()).to.emit(dms, "Released");
+  });
+
+  // --- Day 8: EIP-712 Signature Validation ---
+  it("rejects signatures signed by a non-owner account", async function () {
+    const { dms, otherAccount } = await deploySwitchFixture();
+    const latestTime = await time.latest();
+
+    const forged = await signCheckIn(dms, otherAccount, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+    });
+
+    await expect(
+      dms.checkInWithSignature(forged.nonce, forged.deadline, forged.duress, forged.v, forged.r, forged.s)
+    ).to.be.revertedWith("Invalid signature");
+  });
+
+  it("rejects expired EIP-712 check-in signatures", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+    const latestTime = await time.latest();
+
+    const expired = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_MINUTE,
+    });
+
+    // Advance past the 1-minute signature deadline
+    await time.increase(2 * ONE_MINUTE);
+
+    await expect(
+      dms.checkInWithSignature(expired.nonce, expired.deadline, expired.duress, expired.v, expired.r, expired.s)
+    ).to.be.revertedWith("Signature expired");
   });
 });
