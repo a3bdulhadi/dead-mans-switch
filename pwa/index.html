@@ -41,10 +41,25 @@
 
       <button id="decryptBtn" type="button" class="secondary">Verify &amp; Decrypt</button>
     </section>
+
+    <section class="card">
+      <h2>3. Signed Check-In (Day 8)</h2>
+      <button id="genKeyBtn" type="button">Generate / Load Signing Key</button>
+      <button id="signCheckInBtn" type="button" class="secondary">Sign Typed Check-In</button>
+
+      <div id="checkInBox" class="result hidden">
+        <p class="result-label">Signer Address</p>
+        <code id="signerAddressOutput"></code>
+
+        <p class="result-label">EIP-712 Signature</p>
+        <code id="sigOutput"></code>
+      </div>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
   <script src="./crypto.js"></script>
+  <script src="./checkin.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

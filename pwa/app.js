@@ -19,6 +19,16 @@ const decryptKeyInput = document.getElementById("decryptKeyInput");
 const expectedHashInput = document.getElementById("expectedHashInput");
 const decryptBtn = document.getElementById("decryptBtn");
 
+const genKeyBtn = document.getElementById("genKeyBtn");
+const signCheckInBtn = document.getElementById("signCheckInBtn");
+const checkInBox = document.getElementById("checkInBox");
+const signerAddressOutput = document.getElementById("signerAddressOutput");
+const sigOutput = document.getElementById("sigOutput");
+
+// Placeholder until Member A deploys DeadMansSwitch.sol to Hardhat (chainId 31337)
+const DEFAULT_CHAIN_ID = 31337;
+const DEFAULT_CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000001";
+
 statusEl.textContent = `Ready (ethers ${ethers.version})`;
 
 function downloadBytes(bytes, filename) {
@@ -88,5 +98,33 @@ decryptBtn.addEventListener("click", async () => {
   } catch (err) {
     console.error("Decryption failed:", err);
     statusEl.textContent = "Decryption failed: wrong key or tampered file";
+  }
+});
+
+genKeyBtn.addEventListener("click", () => {
+  const wallet = getOrCreateSigningWallet();
+  signerAddressOutput.textContent = wallet.address;
+  sigOutput.textContent = "(click Sign Typed Check-In to sign)";
+  checkInBox.classList.remove("hidden");
+  statusEl.textContent = "Signing key ready";
+});
+
+signCheckInBtn.addEventListener("click", async () => {
+  try {
+    const counter = getNextCounter();
+    const res = await signCheckInTypedData({
+      contractAddress: DEFAULT_CONTRACT_ADDRESS,
+      chainId: DEFAULT_CHAIN_ID,
+      counter,
+    });
+    saveCounter(counter);
+
+    signerAddressOutput.textContent = res.signerAddress;
+    sigOutput.textContent = `Counter: ${res.counter} | Verified: ${res.verified}\n${res.signature}`;
+    checkInBox.classList.remove("hidden");
+    statusEl.textContent = `Signed check-in #${res.counter}`;
+  } catch (err) {
+    console.error("Signing failed:", err);
+    statusEl.textContent = "Signing failed — see console";
   }
 });
