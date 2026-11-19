@@ -14,6 +14,7 @@
     <p id="status">Loading...</p>
 
     <section class="card">
+      <h2>1. Encrypt Evidence</h2>
       <label for="fileInput" class="label">Select evidence file</label>
       <input type="file" id="fileInput" />
       <button id="encryptBtn" type="button">Encrypt &amp; Download</button>
@@ -25,6 +26,20 @@
         <p class="result-label">One-Time AES Key (Base64 — for testing)</p>
         <code id="keyOutput"></code>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Decrypt Evidence (M1 Demo)</h2>
+      <label for="decryptFileInput" class="label">Select .enc file</label>
+      <input type="file" id="decryptFileInput" />
+
+      <label for="decryptKeyInput" class="label">AES Key (Base64)</label>
+      <input type="text" id="decryptKeyInput" placeholder="Paste Base64 key..." />
+
+      <label for="expectedHashInput" class="label">Expected keccak256 Hash (optional)</label>
+      <input type="text" id="expectedHashInput" placeholder="0x... (leave blank to skip)" />
+
+      <button id="decryptBtn" type="button" class="secondary">Verify &amp; Decrypt</button>
     </section>
   </main>
 
