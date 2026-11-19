@@ -49,3 +49,6 @@ async function decryptBytes(packedBytes, keyBase64) {
   );
   return new Uint8Array(plainBuffer);
 }
+function hashEncryptedBytes(encryptedBytes) {
+  return ethers.keccak256(encryptedBytes);
+}
