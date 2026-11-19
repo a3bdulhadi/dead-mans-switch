@@ -17,6 +17,11 @@ contract DeadMansSwitch {
     uint256 public constant ALERT_THRESHOLD = 2 days;
     uint256 public constant RELEASE_THRESHOLD = 5 days;
 
+    // Events for audit log and release agent monitoring (Day 6)
+    event EvidenceRegistered(address indexed owner, bytes32 indexed evidenceHash, uint256 timestamp);
+    event CheckedIn(address indexed owner, uint256 timestamp);
+    event Released(address indexed triggeredBy, uint256 timestamp);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
@@ -26,6 +31,7 @@ contract DeadMansSwitch {
         owner = msg.sender;
         lastCheckIn = block.timestamp;
         released = false;
+        emit CheckedIn(msg.sender, block.timestamp);
     }
 
     // Store the keccak256 hash of the encrypted evidence file (Synopsis Section 5.3)
@@ -33,36 +39,31 @@ contract DeadMansSwitch {
         require(!released, "Already released");
         require(_evidenceHash != bytes32(0), "Invalid evidence hash");
         evidenceHash = _evidenceHash;
+        emit EvidenceRegistered(msg.sender, _evidenceHash, block.timestamp);
     }
 
     // 4-rule stage function from Synopsis Section 5.3
     function getStage() public view returns (Stage) {
-        // Rule 1: If release has already been finalized, stage is RELEASED
         if (released) {
             return Stage.RELEASED;
         }
 
         uint256 elapsed = block.timestamp - lastCheckIn;
 
-        // Rule 2: Less than 2 days since last check-in -> SAFE
         if (elapsed < ALERT_THRESHOLD) {
             return Stage.SAFE;
-        }
-        // Rule 3: Less than 5 days since last check-in -> ALERT
-        else if (elapsed < RELEASE_THRESHOLD) {
+        } else if (elapsed < RELEASE_THRESHOLD) {
             return Stage.ALERT;
-        }
-        // Rule 4: 5 days or more -> RELEASED
-        else {
+        } else {
             return Stage.RELEASED;
         }
     }
 
     // Check-in helper (will be upgraded to EIP-712 signed check-ins in Week 2)
     function ping() external onlyOwner {
-        // Reject check-ins if already latched OR if 5 days have already elapsed
         require(!released && getStage() != Stage.RELEASED, "Switch already released");
         lastCheckIn = block.timestamp;
+        emit CheckedIn(msg.sender, block.timestamp);
     }
 
     // Permanent release latch called at Day 5+ (Synopsis Section 5.3)
@@ -70,5 +71,6 @@ contract DeadMansSwitch {
         require(!released, "Already latched");
         require(block.timestamp - lastCheckIn >= RELEASE_THRESHOLD, "Release threshold not reached");
         released = true;
+        emit Released(msg.sender, block.timestamp);
     }
 }

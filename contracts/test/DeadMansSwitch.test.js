@@ -106,4 +106,19 @@ describe("DeadMansSwitch - Boundaries, Hash & Release Latch (Days 3-4)", functio
 
     await expect(dms.ping()).to.be.revertedWith("Switch already released");
   });
+// --- Day 6: Events ---
+  it("emits EvidenceRegistered, CheckedIn, and Released events", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+    const sampleHash = ethers.keccak256(ethers.toUtf8Bytes("encrypted-dummy-evidence"));
+
+    await expect(dms.registerEvidence(sampleHash))
+      .to.emit(dms, "EvidenceRegistered");
+
+    await expect(dms.ping())
+      .to.emit(dms, "CheckedIn");
+
+    await time.increase(5 * ONE_DAY);
+    await expect(dms.finalizeRelease())
+      .to.emit(dms, "Released");
+  });
 });
