@@ -1,28 +1,20 @@
 const { ethers } = require("ethers");
+const schema = require("./shared/eip712Schema.json");
 
-// EIP-712 Types matching DeadMansSwitch.sol exactly
-const CHECKIN_TYPES = {
-  CheckIn: [
-    { name: "nonce", type: "uint256" },
-    { name: "deadline", type: "uint256" },
-    { name: "duress", type: "bool" },
-  ],
-};
+const CHECKIN_TYPES = schema.types;
 
 /**
  * Builds the EIP-712 domain object for a deployed DeadMansSwitch instance.
  */
 function buildDomain(chainId, verifyingContract) {
   return {
-    name: "DeadMansSwitch",
-    version: "1",
+    name: schema.domainTemplate.name,
+    version: schema.domainTemplate.version,
     chainId: Number(chainId),
     verifyingContract,
   };
 }
-
-/**
- * Signs an offline check-in packet using an ethers Wallet/Signer and returns
+ /* Signs an offline check-in packet using an ethers Wallet/Signer and returns
  * a portable JSON string suitable for local queue storage or QR/file relay.
  */
 async function createOfflineCheckInPacket({

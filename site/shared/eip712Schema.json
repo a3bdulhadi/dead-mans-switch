@@ -1,0 +1,32 @@
+{
+  "domainTemplate": {
+    "name": "DeadMansSwitch",
+    "version": "1"
+  },
+  "primaryType": "CheckIn",
+  "types": {
+    "CheckIn": [
+      {
+        "name": "nonce",
+        "type": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "name": "duress",
+        "type": "bool"
+      }
+    ]
+  },
+  "stages": {
+    "0": "SAFE",
+    "1": "ALERT",
+    "2": "RELEASED"
+  },
+  "thresholdsSeconds": {
+    "alert": 172800,
+    "release": 432000
+  }
+}
