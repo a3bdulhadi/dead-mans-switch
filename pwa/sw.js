@@ -1,4 +1,4 @@
-const CACHE_NAME = "dms-cache-v1";
+const CACHE_NAME = "dms-cache-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./checkin.js",
   "./chain.js",
   "./queue.js",
+  "./keydelivery.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
