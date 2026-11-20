@@ -192,4 +192,141 @@ describe("DeadMansSwitch - Boundaries, Latch & EIP-712 Check-Ins (Days 3-8)", fu
       dms.checkInWithSignature(expired.nonce, expired.deadline, expired.duress, expired.v, expired.r, expired.s)
     ).to.be.revertedWith("Signature expired");
   });
+// --- Day 9: Replay Protection & Domain Isolation ---
+  it("rejects replaying an already-used nonce signature", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+    const latestTime = await time.latest();
+
+    const signedNonce0 = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+      duress: false,
+    });
+
+    // First submission succeeds and increments nonce to 1
+    await dms.checkInWithSignature(
+      signedNonce0.nonce,
+      signedNonce0.deadline,
+      signedNonce0.duress,
+      signedNonce0.v,
+      signedNonce0.r,
+      signedNonce0.s
+    );
+    expect(await dms.nonce()).to.equal(1);
+
+    // Replaying the exact same signature must fail
+    await expect(
+      dms.checkInWithSignature(
+        signedNonce0.nonce,
+        signedNonce0.deadline,
+        signedNonce0.duress,
+        signedNonce0.v,
+        signedNonce0.r,
+        signedNonce0.s
+      )
+    ).to.be.revertedWith("Invalid nonce");
+  });
+
+  it("rejects out-of-order nonces (e.g., skipping nonce 0 to submit nonce 1)", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+    const latestTime = await time.latest();
+
+    const skippedNonce = await signCheckIn(dms, owner, {
+      nonce: 1,
+      deadline: latestTime + ONE_HOUR,
+      duress: false,
+    });
+
+    await expect(
+      dms.checkInWithSignature(
+        skippedNonce.nonce,
+        skippedNonce.deadline,
+        skippedNonce.duress,
+        skippedNonce.v,
+        skippedNonce.r,
+        skippedNonce.s
+      )
+    ).to.be.revertedWith("Invalid nonce");
+  });
+
+  it("rejects a signature signed for a different contract address (cross-contract isolation)", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+
+    // Deploy a second independent instance of DeadMansSwitch
+    const DeadMansSwitch = await ethers.getContractFactory("DeadMansSwitch");
+    const secondDms = await DeadMansSwitch.deploy();
+    await secondDms.waitForDeployment();
+
+    const latestTime = await time.latest();
+    // Sign specifically for secondDms
+    const signedForSecond = await signCheckIn(secondDms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+      duress: false,
+    });
+
+    // Submitting to the first contract must fail signature verification
+    await expect(
+      dms.checkInWithSignature(
+        signedForSecond.nonce,
+        signedForSecond.deadline,
+        signedForSecond.duress,
+        signedForSecond.v,
+        signedForSecond.r,
+        signedForSecond.s
+      )
+    ).to.be.revertedWith("Invalid signature");
+  });
+
+  it("rejects a signature signed for a different chainId (cross-chain isolation)", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+    const latestTime = await time.latest();
+
+    const wrongChainDomain = {
+      name: "DeadMansSwitch",
+      version: "1",
+      chainId: 11155111, // Sepolia chainId instead of local Hardhat 31337
+      verifyingContract: await dms.getAddress(),
+    };
+
+    const types = {
+      CheckIn: [
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "duress", type: "bool" },
+      ],
+    };
+
+    const value = { nonce: 0, deadline: latestTime + ONE_HOUR, duress: false };
+    const signature = await owner.signTypedData(wrongChainDomain, types, value);
+    const { v, r, s } = ethers.Signature.from(signature);
+
+    await expect(
+      dms.checkInWithSignature(0, value.deadline, false, v, r, s)
+    ).to.be.revertedWith("Invalid signature");
+  });
+
+  it("rejects tampered payload fields (e.g., flipping duress bit after signing)", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+    const latestTime = await time.latest();
+
+    // Owner signs with duress = true
+    const signedDuress = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+      duress: true,
+    });
+
+    // Attacker intercepts and tries to submit with duress = false
+    await expect(
+      dms.checkInWithSignature(
+        signedDuress.nonce,
+        signedDuress.deadline,
+        false, // tampered field
+        signedDuress.v,
+        signedDuress.r,
+        signedDuress.s
+      )
+    ).to.be.revertedWith("Invalid signature");
+  });
 });
