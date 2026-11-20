@@ -6,3 +6,6 @@ contracts/typechain-types/
 
 .env
 agent/.env
+
+agent/escrow.json
+agent/release_bundle.json

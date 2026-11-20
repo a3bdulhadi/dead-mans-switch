@@ -3,6 +3,7 @@ const { ethers } = require("ethers");
 const abi = require("./shared/DeadMansSwitch.abi.json");
 const deployment = require("./shared/deployment.json");
 const { sendAlert } = require("./notifier");
+const { buildReleaseBundle } = require("./releaseBuilder");
 
 const STAGE_NAMES = {
   0: "SAFE",
@@ -60,25 +61,45 @@ async function checkContractOnce(contract) {
     stateTracker.lastNotifiedStage = 0;
   }
 
-  // 3. Automatic Release Latch at Day 5+ (Stage === RELEASED)
+ // 3. Automatic Release Latch at Day 5+ (Stage === RELEASED)
   if (stageNum === 2) {
+    let releaseTxHash = null;
     if (!isReleasedLatched && !stateTracker.releaseFinalized) {
       console.log("[Action] Day 5 threshold reached! Calling finalizeRelease() on-chain...");
       const tx = await contract.finalizeRelease();
       const receipt = await tx.wait();
+      releaseTxHash = receipt.hash;
       stateTracker.releaseFinalized = true;
-      console.log("[Action] Release permanently latched! Tx:", receipt.hash);
+      console.log("[Action] Release permanently latched! Tx:", releaseTxHash);
     }
 
     if (stateTracker.lastNotifiedStage !== 2) {
       stateTracker.lastNotifiedStage = 2;
+
+      let releaseDetails = `Registered Evidence Hash: ${evidenceHash}`;
+      try {
+        const bundle = buildReleaseBundle({
+          contractAddress: deployment.address,
+          chainId: deployment.chainId,
+          onChainEvidenceHash: evidenceHash,
+          releaseTxHash,
+        });
+        releaseDetails =
+          `Evidence Hash: ${bundle.evidence.evidenceHash}\n` +
+          `Storage URI: ${bundle.evidence.storageUri}\n` +
+          `Algorithm: ${bundle.evidence.algorithm}\n` +
+          `Decryption Key (Base64): ${bundle.evidence.keyBase64}\n` +
+          `IV (Base64): ${bundle.evidence.ivBase64}`;
+      } catch (escrowErr) {
+        releaseDetails += `\n(Note: Local escrow bundle skipped: ${escrowErr.message})`;
+      }
+
       await sendAlert({
         level: "EMERGENCY - RELEASED",
         title: "Dead Man's Switch RELEASED",
         message:
           `Contract ${deployment.address} has permanently latched into RELEASED state.\n` +
-          `Registered Evidence Hash: ${evidenceHash}\n` +
-          `Executing public key & evidence release payload.`,
+          releaseDetails,
       });
     }
   }
