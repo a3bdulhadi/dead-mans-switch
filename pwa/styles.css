@@ -46,7 +46,36 @@ h2 {
   padding: 0.5rem 0.9rem;
   border-radius: 8px;
   display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.stage-badge {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
   margin-bottom: 1.25rem;
+}
+
+.stage-unknown {
+  background-color: #334155;
+  color: #cbd5e1;
+}
+
+.stage-safe {
+  background-color: #065f46;
+  color: #6ee7b7;
+}
+
+.stage-alert {
+  background-color: #92400e;
+  color: #fde68a;
+}
+
+.stage-released {
+  background-color: #991b1b;
+  color: #fca5a5;
 }
 
 .card {

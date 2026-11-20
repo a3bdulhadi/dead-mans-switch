@@ -8,6 +8,7 @@ if ("serviceWorker" in navigator) {
 }
 
 const statusEl = document.getElementById("status");
+const stageBadge = document.getElementById("stageBadge");
 const fileInput = document.getElementById("fileInput");
 const encryptBtn = document.getElementById("encryptBtn");
 const resultBox = document.getElementById("resultBox");
@@ -19,17 +20,32 @@ const decryptKeyInput = document.getElementById("decryptKeyInput");
 const expectedHashInput = document.getElementById("expectedHashInput");
 const decryptBtn = document.getElementById("decryptBtn");
 
+const rpcInput = document.getElementById("rpcInput");
+const contractInput = document.getElementById("contractInput");
 const genKeyBtn = document.getElementById("genKeyBtn");
-const signCheckInBtn = document.getElementById("signCheckInBtn");
+const refreshStageBtn = document.getElementById("refreshStageBtn");
+const sendCheckInBtn = document.getElementById("sendCheckInBtn");
 const checkInBox = document.getElementById("checkInBox");
 const signerAddressOutput = document.getElementById("signerAddressOutput");
 const sigOutput = document.getElementById("sigOutput");
 
-// Placeholder until Member A deploys DeadMansSwitch.sol to Hardhat (chainId 31337)
 const DEFAULT_CHAIN_ID = 31337;
-const DEFAULT_CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000001";
 
 statusEl.textContent = `Ready (ethers ${ethers.version})`;
+
+function updateStageBadge(stage) {
+  stageBadge.className = "stage-badge";
+  if (stage === "SAFE") {
+    stageBadge.classList.add("stage-safe");
+  } else if (stage === "ALERT") {
+    stageBadge.classList.add("stage-alert");
+  } else if (stage === "RELEASED") {
+    stageBadge.classList.add("stage-released");
+  } else {
+    stageBadge.classList.add("stage-unknown");
+  }
+  stageBadge.textContent = `STAGE: ${stage}`;
+}
 
 function downloadBytes(bytes, filename) {
   const blob = new Blob([bytes], { type: "application/octet-stream" });
@@ -104,27 +120,63 @@ decryptBtn.addEventListener("click", async () => {
 genKeyBtn.addEventListener("click", () => {
   const wallet = getOrCreateSigningWallet();
   signerAddressOutput.textContent = wallet.address;
-  sigOutput.textContent = "(click Sign Typed Check-In to sign)";
+  sigOutput.textContent = "(click Sign & Send Check-In to submit on-chain)";
   checkInBox.classList.remove("hidden");
   statusEl.textContent = "Signing key ready";
 });
 
-signCheckInBtn.addEventListener("click", async () => {
+refreshStageBtn.addEventListener("click", async () => {
+  const rpcUrl = rpcInput.value.trim();
+  const contractAddress = contractInput.value.trim();
+  if (!rpcUrl || !contractAddress) {
+    statusEl.textContent = "Enter RPC URL and Contract Address";
+    return;
+  }
+
   try {
+    statusEl.textContent = "Reading stage...";
+    const { stage } = await fetchContractStage(rpcUrl, contractAddress);
+    updateStageBadge(stage);
+    statusEl.textContent = `Contract stage: ${stage}`;
+  } catch (err) {
+    console.error("Stage fetch failed:", err);
+    updateStageBadge("NOT CONNECTED");
+    statusEl.textContent = "Failed to read stage — is Hardhat running?";
+  }
+});
+
+sendCheckInBtn.addEventListener("click", async () => {
+  const rpcUrl = rpcInput.value.trim();
+  const contractAddress = contractInput.value.trim();
+  if (!rpcUrl || !contractAddress) {
+    statusEl.textContent = "Enter RPC URL and Contract Address";
+    return;
+  }
+
+  try {
+    statusEl.textContent = "Signing & sending check-in...";
     const counter = getNextCounter();
-    const res = await signCheckInTypedData({
-      contractAddress: DEFAULT_CONTRACT_ADDRESS,
+    const signed = await signCheckInTypedData({
+      contractAddress,
       chainId: DEFAULT_CHAIN_ID,
       counter,
     });
-    saveCounter(counter);
 
-    signerAddressOutput.textContent = res.signerAddress;
-    sigOutput.textContent = `Counter: ${res.counter} | Verified: ${res.verified}\n${res.signature}`;
+    const receipt = await sendSignedCheckIn({
+      rpcUrl,
+      contractAddress,
+      counter,
+      signature: signed.signature,
+    });
+
+    saveCounter(counter);
+    updateStageBadge(receipt.stage);
+    signerAddressOutput.textContent = signed.signerAddress;
+    sigOutput.textContent = `Counter: ${counter} | Tx: ${receipt.txHash}`;
     checkInBox.classList.remove("hidden");
-    statusEl.textContent = `Signed check-in #${res.counter}`;
+    statusEl.textContent = `Check-in #${counter} confirmed (${receipt.stage})`;
   } catch (err) {
-    console.error("Signing failed:", err);
-    statusEl.textContent = "Signing failed — see console";
+    console.error("Check-in failed:", err);
+    statusEl.textContent = "Check-in failed — see console";
   }
 });
