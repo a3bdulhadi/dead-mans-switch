@@ -310,3 +310,84 @@ refreshQueueCount();
 if (contractInput.value.trim()) {
   refreshContractUI();
 }
+const wizardFileInput = document.getElementById("wizardFileInput");
+const agentKeyInput = document.getElementById("agentKeyInput");
+const runWizardBtn = document.getElementById("runWizardBtn");
+const wizardBox = document.getElementById("wizardBox");
+const wizardOutput = document.getElementById("wizardOutput");
+
+runWizardBtn.addEventListener("click", async () => {
+  const file = wizardFileInput.files[0];
+  const rpcUrl = rpcInput.value.trim();
+  const contractAddress = contractInput.value.trim();
+
+  if (!file) {
+    statusEl.textContent = "Pick an evidence file for the Setup Wizard";
+    return;
+  }
+  if (!rpcUrl || !contractAddress) {
+    statusEl.textContent = "Enter RPC URL and Contract Address first";
+    return;
+  }
+
+  runWizardBtn.disabled = true;
+  runWizardBtn.textContent = "Running Setup...";
+  wizardBox.classList.remove("hidden");
+  const log = [];
+
+  try {
+    // 1. Encrypt evidence
+    statusEl.textContent = "Wizard 1/4: Encrypting file...";
+    const plainBytes = new Uint8Array(await file.arrayBuffer());
+    const { encryptedBytes, keyBase64 } = await encryptBytes(plainBytes);
+    const hash = hashEncryptedBytes(encryptedBytes);
+    log.push(`1. Encrypted (${encryptedBytes.length} bytes)`);
+    log.push(`   Hash: ${hash}`);
+
+    // 2. Wrap key for Release Agent (ECDH + HKDF + AES-GCM)
+    statusEl.textContent = "Wizard 2/4: Wrapping key...";
+    let agentPubJwk;
+    const rawJwk = agentKeyInput.value.trim();
+    if (rawJwk) {
+      agentPubJwk = JSON.parse(rawJwk);
+    } else {
+      const tempAgent = await crypto.subtle.generateKey(
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        ["deriveBits"]
+      );
+      agentPubJwk = await crypto.subtle.exportKey("jwk", tempAgent.publicKey);
+    }
+    const envelope = await wrapKeyForAgent(keyBase64, agentPubJwk);
+    log.push("2. Wrapped AES key (ECDH+HKDF+AES-GCM)");
+
+    // 3. Store evidence hash on-chain
+    statusEl.textContent = "Wizard 3/4: Storing hash on contract...";
+    const { txHash } = await registerEvidenceOnChain({
+      rpcUrl,
+      contractAddress,
+      evidenceHash: hash,
+    });
+    log.push(`3. Hash stored on-chain (Tx: ${txHash})`);
+
+    // 4. Download .enc file and wrapped-key.json
+    statusEl.textContent = "Wizard 4/4: Downloading files...";
+    downloadBytes(encryptedBytes, `${file.name}.enc`);
+    const wrappedJson = new TextEncoder().encode(
+      JSON.stringify({ fileName: `${file.name}.enc`, evidenceHash: hash, envelope }, null, 2)
+    );
+    downloadBytes(wrappedJson, "wrapped-key.json");
+    log.push(`4. Downloaded ${file.name}.enc + wrapped-key.json`);
+
+    wizardOutput.textContent = log.join("\n");
+    statusEl.textContent = "Setup Wizard complete!";
+  } catch (err) {
+    console.error("Setup Wizard failed:", err);
+    log.push(`Error: ${err.message || err}`);
+    wizardOutput.textContent = log.join("\n");
+    statusEl.textContent = "Setup Wizard failed — see console";
+  } finally {
+    runWizardBtn.disabled = false;
+    runWizardBtn.textContent = "Run Setup Wizard";
+  }
+});

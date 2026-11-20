@@ -55,6 +55,20 @@
     </section>
 
     <section class="card">
+      <h2>0. Setup Wizard (Day 17)</h2>
+      <label for="wizardFileInput" class="label">1. Choose Evidence File</label>
+      <input type="file" id="wizardFileInput" />
+
+      <label for="agentKeyInput" class="label">2. Agent Public Key JWK (leave blank for local test key)</label>
+      <input type="text" id="agentKeyInput" placeholder='{"kty":"EC",...} (optional)' />
+
+      <button id="runWizardBtn" type="button">Run Setup Wizard</button>
+
+      <div id="wizardBox" class="result hidden">
+        <p class="result-label">Setup Progress</p>
+        <code id="wizardOutput"></code>
+      </div>
+    </section>
       <h2>1. Encrypt Evidence</h2>
       <label for="fileInput" class="label">Select evidence file</label>
       <input type="file" id="fileInput" />

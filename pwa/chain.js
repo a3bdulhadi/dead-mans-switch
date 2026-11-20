@@ -2,6 +2,8 @@ const DMS_ABI = [
   "function getStage() view returns (uint8)",
   "function lastCheckIn() view returns (uint256)",
   "function nonce() view returns (uint256)",
+  "function evidenceHash() view returns (bytes32)",
+  "function registerEvidence(bytes32 _evidenceHash) external",
   "function checkInWithSignature(uint256 _nonce, uint256 _deadline, bool _duress, uint8 v, bytes32 r, bytes32 s) external"
 ];
 
@@ -19,6 +21,15 @@ async function fetchContractStage(rpcUrl, contractAddress) {
     lastCheckIn,
     nonce: onChainNonce,
   };
+}
+
+async function registerEvidenceOnChain({ rpcUrl, contractAddress, evidenceHash }) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const ownerSigner = await provider.getSigner(0);
+  const contract = new ethers.Contract(contractAddress, DMS_ABI, ownerSigner);
+  const tx = await contract.registerEvidence(evidenceHash);
+  const receipt = await tx.wait();
+  return { txHash: receipt.hash };
 }
 
 async function sendSignedCheckIn({ rpcUrl, contractAddress, nonce, deadline, duress, v, r, s }) {
