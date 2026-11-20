@@ -3,3 +3,6 @@
 contracts/cache/
 contracts/artifacts/
 contracts/typechain-types/
+
+.env
+agent/.env
