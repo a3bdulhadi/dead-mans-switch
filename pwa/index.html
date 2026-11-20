@@ -27,6 +27,11 @@
 
     <button id="sendCheckInBtn" type="button" class="hero-btn">Check In Now</button>
 
+    <div class="queue-row">
+      <span id="queueText">Queued: 0</span>
+      <button id="syncQueueBtn" type="button" class="secondary">Sync Queue</button>
+    </div>
+
     <section class="card">
       <h2>Chain Settings</h2>
       <label for="rpcInput" class="label">Local Chain RPC URL</label>
@@ -83,6 +88,7 @@
   <script src="./crypto.js"></script>
   <script src="./checkin.js"></script>
   <script src="./chain.js"></script>
+  <script src="./queue.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

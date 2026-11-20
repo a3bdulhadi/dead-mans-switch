@@ -15,6 +15,8 @@ const statusEl = document.getElementById("status");
 const stageBadge = document.getElementById("stageBadge");
 const lastCheckInText = document.getElementById("lastCheckInText");
 const countdownText = document.getElementById("countdownText");
+const queueText = document.getElementById("queueText");
+const syncQueueBtn = document.getElementById("syncQueueBtn");
 
 const fileInput = document.getElementById("fileInput");
 const encryptBtn = document.getElementById("encryptBtn");
@@ -39,7 +41,6 @@ const sigOutput = document.getElementById("sigOutput");
 const DEFAULT_CHAIN_ID = 31337;
 let lastCheckInUnix = 0;
 
-// Restore saved chain settings
 rpcInput.value = localStorage.getItem(RPC_STORAGE) || "http://127.0.0.1:8545";
 contractInput.value = localStorage.getItem(CONTRACT_STORAGE) || "";
 statusEl.textContent = `Ready (ethers ${ethers.version})`;
@@ -89,6 +90,12 @@ function updateStageBadge(stage) {
   stageBadge.textContent = `STAGE: ${stage}`;
 }
 
+async function refreshQueueCount() {
+  const items = await getPendingCheckIns();
+  queueText.textContent = `Queued: ${items.length}`;
+  return items;
+}
+
 function downloadBytes(bytes, filename) {
   const blob = new Blob([bytes], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
@@ -120,7 +127,42 @@ async function refreshContractUI() {
     console.error("Stage fetch failed:", err);
     updateStageBadge("NOT CONNECTED");
     updateStatusGrid(0);
-    statusEl.textContent = "Failed to read stage — is Hardhat running?";
+    statusEl.textContent = "Offline or Hardhat not running";
+  }
+}
+
+async function syncPendingQueue() {
+  const items = await getPendingCheckIns();
+  if (items.length === 0) {
+    statusEl.textContent = "Queue is empty";
+    return;
+  }
+
+  syncQueueBtn.disabled = true;
+  let synced = 0;
+
+  try {
+    for (const item of items) {
+      if (!item.r || !item.s || item.v === undefined) {
+        await removePendingCheckIn(item.id);
+        continue;
+      }
+      statusEl.textContent = `Syncing queued check-in #${item.nonce}...`;
+      const receipt = await sendSignedCheckIn(item);
+      await removePendingCheckIn(item.id);
+      synced += 1;
+      updateStageBadge(receipt.stage);
+      updateStatusGrid(receipt.lastCheckIn);
+      sigOutput.textContent = `Synced nonce ${item.nonce} | Tx: ${receipt.txHash}`;
+      checkInBox.classList.remove("hidden");
+    }
+    statusEl.textContent = `Synced ${synced} queued check-in(s)`;
+  } catch (err) {
+    console.error("Queue sync failed:", err);
+    statusEl.textContent = `Synced ${synced}, remaining stay queued`;
+  } finally {
+    await refreshQueueCount();
+    syncQueueBtn.disabled = false;
   }
 }
 
@@ -193,6 +235,8 @@ genKeyBtn.addEventListener("click", () => {
 });
 
 refreshStageBtn.addEventListener("click", refreshContractUI);
+syncQueueBtn.addEventListener("click", syncPendingQueue);
+window.addEventListener("online", syncPendingQueue);
 
 sendCheckInBtn.addEventListener("click", async () => {
   const rpcUrl = rpcInput.value.trim();
@@ -206,33 +250,55 @@ sendCheckInBtn.addEventListener("click", async () => {
   localStorage.setItem(CONTRACT_STORAGE, contractAddress);
 
   sendCheckInBtn.disabled = true;
-  sendCheckInBtn.textContent = "Sending Check-In...";
+  sendCheckInBtn.textContent = "Signing Check-In...";
 
   try {
-    statusEl.textContent = "Signing & sending check-in...";
-    const counter = getNextCounter();
+    const nonce = getNextCounter();
     const signed = await signCheckInTypedData({
       contractAddress,
       chainId: DEFAULT_CHAIN_ID,
-      counter,
+      nonce,
+      duress: false,
     });
+    saveCounter(nonce);
 
-    const receipt = await sendSignedCheckIn({
+    signerAddressOutput.textContent = signed.signerAddress;
+    checkInBox.classList.remove("hidden");
+
+    const payload = {
       rpcUrl,
       contractAddress,
-      counter,
-      signature: signed.signature,
-    });
+      nonce: signed.nonce,
+      deadline: signed.deadline,
+      duress: signed.duress,
+      v: signed.v,
+      r: signed.r,
+      s: signed.s,
+    };
 
-    saveCounter(counter);
-    updateStageBadge(receipt.stage);
-    updateStatusGrid(receipt.lastCheckIn);
-    signerAddressOutput.textContent = signed.signerAddress;
-    sigOutput.textContent = `Counter: ${counter} | Tx: ${receipt.txHash}`;
-    checkInBox.classList.remove("hidden");
-    statusEl.textContent = `Check-in #${counter} confirmed (${receipt.stage})`;
+    if (!navigator.onLine) {
+      await enqueueCheckIn(payload);
+      await refreshQueueCount();
+      sigOutput.textContent = `Queued offline (nonce ${nonce})`;
+      statusEl.textContent = `Offline — check-in (nonce ${nonce}) queued in IndexedDB`;
+      return;
+    }
+
+    try {
+      sendCheckInBtn.textContent = "Sending Check-In...";
+      const receipt = await sendSignedCheckIn(payload);
+      updateStageBadge(receipt.stage);
+      updateStatusGrid(receipt.lastCheckIn);
+      sigOutput.textContent = `Nonce: ${nonce} | Tx: ${receipt.txHash}`;
+      statusEl.textContent = `Check-in (nonce ${nonce}) confirmed (${receipt.stage})`;
+    } catch (netErr) {
+      await enqueueCheckIn(payload);
+      await refreshQueueCount();
+      sigOutput.textContent = `Queued offline (nonce ${nonce})`;
+      statusEl.textContent = `Chain unreachable — check-in (nonce ${nonce}) queued`;
+    }
   } catch (err) {
-    console.error("Check-in failed:", err);
+    console.error("Check-in error:", err);
     statusEl.textContent = "Check-in failed — see console";
   } finally {
     sendCheckInBtn.disabled = false;
@@ -240,6 +306,7 @@ sendCheckInBtn.addEventListener("click", async () => {
   }
 });
 
+refreshQueueCount();
 if (contractInput.value.trim()) {
   refreshContractUI();
 }
