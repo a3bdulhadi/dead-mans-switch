@@ -7,8 +7,15 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+const RPC_STORAGE = "dms_rpc_url_v1";
+const CONTRACT_STORAGE = "dms_contract_addr_v1";
+const ALERT_SECONDS = 2 * 24 * 60 * 60;
+
 const statusEl = document.getElementById("status");
 const stageBadge = document.getElementById("stageBadge");
+const lastCheckInText = document.getElementById("lastCheckInText");
+const countdownText = document.getElementById("countdownText");
+
 const fileInput = document.getElementById("fileInput");
 const encryptBtn = document.getElementById("encryptBtn");
 const resultBox = document.getElementById("resultBox");
@@ -30,8 +37,43 @@ const signerAddressOutput = document.getElementById("signerAddressOutput");
 const sigOutput = document.getElementById("sigOutput");
 
 const DEFAULT_CHAIN_ID = 31337;
+let lastCheckInUnix = 0;
 
+// Restore saved chain settings
+rpcInput.value = localStorage.getItem(RPC_STORAGE) || "http://127.0.0.1:8545";
+contractInput.value = localStorage.getItem(CONTRACT_STORAGE) || "";
 statusEl.textContent = `Ready (ethers ${ethers.version})`;
+
+function formatDuration(sec) {
+  if (sec <= 0) return "0h 0m (ALERT due)";
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return `${d}d ${h}h ${m}m`;
+}
+
+function updateStatusGrid(unixSec) {
+  lastCheckInUnix = unixSec;
+  if (!unixSec) {
+    lastCheckInText.textContent = "—";
+    countdownText.textContent = "—";
+    return;
+  }
+  const date = new Date(unixSec * 1000);
+  lastCheckInText.textContent = date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const nowSec = Math.floor(Date.now() / 1000);
+  const remaining = unixSec + ALERT_SECONDS - nowSec;
+  countdownText.textContent = formatDuration(remaining);
+}
+
+setInterval(() => {
+  if (lastCheckInUnix > 0) updateStatusGrid(lastCheckInUnix);
+}, 30000);
 
 function updateStageBadge(stage) {
   stageBadge.className = "stage-badge";
@@ -55,6 +97,31 @@ function downloadBytes(bytes, filename) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+async function refreshContractUI() {
+  const rpcUrl = rpcInput.value.trim();
+  const contractAddress = contractInput.value.trim();
+  if (!rpcUrl || !contractAddress) {
+    statusEl.textContent = "Enter RPC URL and Contract Address";
+    return;
+  }
+
+  localStorage.setItem(RPC_STORAGE, rpcUrl);
+  localStorage.setItem(CONTRACT_STORAGE, contractAddress);
+
+  try {
+    statusEl.textContent = "Reading stage...";
+    const { stage, lastCheckIn } = await fetchContractStage(rpcUrl, contractAddress);
+    updateStageBadge(stage);
+    updateStatusGrid(lastCheckIn);
+    statusEl.textContent = `Connected (${stage})`;
+  } catch (err) {
+    console.error("Stage fetch failed:", err);
+    updateStageBadge("NOT CONNECTED");
+    updateStatusGrid(0);
+    statusEl.textContent = "Failed to read stage — is Hardhat running?";
+  }
 }
 
 encryptBtn.addEventListener("click", async () => {
@@ -120,38 +187,26 @@ decryptBtn.addEventListener("click", async () => {
 genKeyBtn.addEventListener("click", () => {
   const wallet = getOrCreateSigningWallet();
   signerAddressOutput.textContent = wallet.address;
-  sigOutput.textContent = "(click Sign & Send Check-In to submit on-chain)";
+  sigOutput.textContent = "(ready to sign)";
   checkInBox.classList.remove("hidden");
   statusEl.textContent = "Signing key ready";
 });
 
-refreshStageBtn.addEventListener("click", async () => {
-  const rpcUrl = rpcInput.value.trim();
-  const contractAddress = contractInput.value.trim();
-  if (!rpcUrl || !contractAddress) {
-    statusEl.textContent = "Enter RPC URL and Contract Address";
-    return;
-  }
-
-  try {
-    statusEl.textContent = "Reading stage...";
-    const { stage } = await fetchContractStage(rpcUrl, contractAddress);
-    updateStageBadge(stage);
-    statusEl.textContent = `Contract stage: ${stage}`;
-  } catch (err) {
-    console.error("Stage fetch failed:", err);
-    updateStageBadge("NOT CONNECTED");
-    statusEl.textContent = "Failed to read stage — is Hardhat running?";
-  }
-});
+refreshStageBtn.addEventListener("click", refreshContractUI);
 
 sendCheckInBtn.addEventListener("click", async () => {
   const rpcUrl = rpcInput.value.trim();
   const contractAddress = contractInput.value.trim();
   if (!rpcUrl || !contractAddress) {
-    statusEl.textContent = "Enter RPC URL and Contract Address";
+    statusEl.textContent = "Enter RPC URL and Contract Address first";
     return;
   }
+
+  localStorage.setItem(RPC_STORAGE, rpcUrl);
+  localStorage.setItem(CONTRACT_STORAGE, contractAddress);
+
+  sendCheckInBtn.disabled = true;
+  sendCheckInBtn.textContent = "Sending Check-In...";
 
   try {
     statusEl.textContent = "Signing & sending check-in...";
@@ -171,6 +226,7 @@ sendCheckInBtn.addEventListener("click", async () => {
 
     saveCounter(counter);
     updateStageBadge(receipt.stage);
+    updateStatusGrid(receipt.lastCheckIn);
     signerAddressOutput.textContent = signed.signerAddress;
     sigOutput.textContent = `Counter: ${counter} | Tx: ${receipt.txHash}`;
     checkInBox.classList.remove("hidden");
@@ -178,5 +234,12 @@ sendCheckInBtn.addEventListener("click", async () => {
   } catch (err) {
     console.error("Check-in failed:", err);
     statusEl.textContent = "Check-in failed — see console";
+  } finally {
+    sendCheckInBtn.disabled = false;
+    sendCheckInBtn.textContent = "Check In Now";
   }
 });
+
+if (contractInput.value.trim()) {
+  refreshContractUI();
+}

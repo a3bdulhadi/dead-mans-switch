@@ -29,33 +29,33 @@ main {
 h1 {
   font-size: 1.5rem;
   font-weight: 700;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
 }
 
 h2 {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #e2e8f0;
   margin-bottom: 0.25rem;
 }
 
 #status {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #38bdf8;
   background-color: #0f172a;
-  padding: 0.5rem 0.9rem;
+  padding: 0.45rem 0.85rem;
   border-radius: 8px;
   display: inline-block;
   margin-bottom: 0.75rem;
 }
 
 .stage-badge {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 0.6rem 1rem;
+  letter-spacing: 0.06em;
+  padding: 0.7rem 1rem;
   border-radius: 10px;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.85rem;
 }
 
 .stage-unknown {
@@ -78,6 +78,50 @@ h2 {
   color: #fca5a5;
 }
 
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+}
+
+.stat-box {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 0.65rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-box strong {
+  font-size: 0.9rem;
+  color: #f8fafc;
+}
+
+.hero-btn {
+  background-color: #10b981;
+  color: #022c22;
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0.95rem 1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+}
+
+.hero-btn:hover {
+  background-color: #059669;
+  color: #ffffff;
+}
+
 .card {
   text-align: left;
   display: flex;
@@ -88,10 +132,10 @@ h2 {
   border-top: 1px solid #334155;
 }
 
-.card:first-of-type {
-  padding-top: 0;
-  margin-top: 0;
-  border-top: none;
+.btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
 }
 
 .label {
@@ -117,13 +161,18 @@ button {
   border-radius: 8px;
   background-color: #0284c7;
   color: #ffffff;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 button:hover {
   background-color: #0369a1;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 button.secondary {
