@@ -329,4 +329,81 @@ describe("DeadMansSwitch - Boundaries, Latch & EIP-712 Check-Ins (Days 3-8)", fu
       )
     ).to.be.revertedWith("Invalid signature");
   });
+// --- Day 10: Silent Duress Check-In ---
+  it("silently sets duressTriggered and emits both CheckedIn and DuressSignaled when duress=true", async function () {
+    const { dms, owner } = await deploySwitchFixture();
+
+    // Advance 3 days into ALERT stage
+    await time.increase(3 * ONE_DAY);
+    expect(await dms.getStage()).to.equal(STAGE.ALERT);
+
+    const latestTime = await time.latest();
+    const duressCheckIn = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+      duress: true,
+    });
+
+    const tx = dms.checkInWithSignature(
+      duressCheckIn.nonce,
+      duressCheckIn.deadline,
+      duressCheckIn.duress,
+      duressCheckIn.v,
+      duressCheckIn.r,
+      duressCheckIn.s
+    );
+
+    // Emits normal CheckedIn (for cover) AND silent DuressSignaled (for agent)
+    await expect(tx).to.emit(dms, "CheckedIn").withArgs(owner.address, 0, anyValue => true);
+    await expect(tx).to.emit(dms, "DuressSignaled");
+
+    // Stage visibly resets to SAFE so a coercer sees a normal check-in
+    expect(await dms.getStage()).to.equal(STAGE.SAFE);
+    expect(await dms.duressTriggered()).to.equal(true);
+  });
+
+  it("does not emit DuressSignaled on normal check-ins and lets owner clear duress when safe", async function () {
+    const { dms, owner, otherAccount } = await deploySwitchFixture();
+    const latestTime = await time.latest();
+
+    // 1. Normal check-in (duress = false)
+    const normalCheckIn = await signCheckIn(dms, owner, {
+      nonce: 0,
+      deadline: latestTime + ONE_HOUR,
+      duress: false,
+    });
+
+    await expect(
+      dms.checkInWithSignature(
+        normalCheckIn.nonce,
+        normalCheckIn.deadline,
+        normalCheckIn.duress,
+        normalCheckIn.v,
+        normalCheckIn.r,
+        normalCheckIn.s
+      )
+    ).to.not.emit(dms, "DuressSignaled");
+    expect(await dms.duressTriggered()).to.equal(false);
+
+    // 2. Trigger duress on nonce 1
+    const duressCheckIn = await signCheckIn(dms, owner, {
+      nonce: 1,
+      deadline: latestTime + ONE_HOUR,
+      duress: true,
+    });
+    await dms.checkInWithSignature(
+      duressCheckIn.nonce,
+      duressCheckIn.deadline,
+      duressCheckIn.duress,
+      duressCheckIn.v,
+      duressCheckIn.r,
+      duressCheckIn.s
+    );
+    expect(await dms.duressTriggered()).to.equal(true);
+
+    // 3. Non-owner cannot clear duress; owner can clear it once safe
+    await expect(dms.connect(otherAccount).clearDuress()).to.be.revertedWith("Not owner");
+    await dms.clearDuress();
+    expect(await dms.duressTriggered()).to.equal(false);
+  });
 });

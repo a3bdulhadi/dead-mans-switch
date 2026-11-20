@@ -13,11 +13,12 @@ contract DeadMansSwitch {
     uint256 public lastCheckIn;
     bytes32 public evidenceHash;
     bool public released;
+    bool public duressTriggered;
 
     uint256 public constant ALERT_THRESHOLD = 2 days;
     uint256 public constant RELEASE_THRESHOLD = 5 days;
 
-    // EIP-712 Typed-Data Constants (Day 8)
+    // EIP-712 Typed-Data Constants
     bytes32 public constant DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
@@ -31,6 +32,7 @@ contract DeadMansSwitch {
     // Events for audit log and release agent monitoring
     event EvidenceRegistered(address indexed owner, bytes32 indexed evidenceHash, uint256 timestamp);
     event CheckedIn(address indexed owner, uint256 indexed nonce, uint256 timestamp);
+    event DuressSignaled(address indexed owner, uint256 indexed nonce, uint256 timestamp);
     event Released(address indexed triggeredBy, uint256 timestamp);
 
     modifier onlyOwner() {
@@ -42,6 +44,7 @@ contract DeadMansSwitch {
         owner = msg.sender;
         lastCheckIn = block.timestamp;
         released = false;
+        duressTriggered = false;
 
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
@@ -81,7 +84,7 @@ contract DeadMansSwitch {
         }
     }
 
-    // EIP-712 Signed Check-In (replaces temporary ping())
+    // EIP-712 Signed Check-In with Silent Duress Support (Day 10)
     function checkInWithSignature(
         uint256 _nonce,
         uint256 _deadline,
@@ -107,8 +110,20 @@ contract DeadMansSwitch {
         nonce = _nonce + 1;
         lastCheckIn = block.timestamp;
 
-        // Note: _duress silent alert handling will be wired up on Day 10
+        // Always emit standard CheckedIn so UI behavior looks identical to a coercer
         emit CheckedIn(owner, _nonce, block.timestamp);
+
+        // If signed under duress, silently record and emit DuressSignaled for the agent
+        if (_duress) {
+            duressTriggered = true;
+            emit DuressSignaled(owner, _nonce, block.timestamp);
+        }
+    }
+
+    // Allow owner to reset the duress flag once safe
+    function clearDuress() external onlyOwner {
+        require(!released, "Already released");
+        duressTriggered = false;
     }
 
     // Permanent release latch called at Day 5+
