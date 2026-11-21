@@ -4,6 +4,7 @@ const abi = require("./shared/DeadMansSwitch.abi.json");
 const deployment = require("./shared/deployment.json");
 const { sendAlert } = require("./notifier");
 const { buildReleaseBundle } = require("./releaseBuilder");
+const { processPacketQueue } = require("./queueRelayer");
 
 const STAGE_NAMES = {
   0: "SAFE",
@@ -19,6 +20,13 @@ const stateTracker = {
 };
 
 async function checkContractOnce(contract) {
+  // 0. Process any queued offline EIP-712 check-in packets first
+  if (contract.runner && contract.runner.provider) {
+    await processPacketQueue({
+      contract,
+      provider: contract.runner.provider,
+    });
+  }
   const stageNum = Number(await contract.getStage());
   const stageName = STAGE_NAMES[stageNum] || "UNKNOWN";
   const lastCheckIn = Number(await contract.lastCheckIn());

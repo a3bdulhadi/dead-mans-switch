@@ -9,3 +9,6 @@ agent/.env
 
 agent/escrow.json
 agent/release_bundle.json
+
+agent/queue/*.json
+agent/queue/processed/*.json
