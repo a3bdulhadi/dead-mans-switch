@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Public Evidence Portal — Dead Man's Switch</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Read-Only Public Portal</p>
+      <h1>Dead Man's Switch — Evidence Archive</h1>
+      <div id="stageBadge" class="stage-badge stage-unknown">STAGE: CHECKING...</div>
+    </header>
+
+    <section class="card">
+      <h2>1. Live Contract State</h2>
+      <div class="meta-row">
+        <span>RPC URL</span>
+        <input type="text" id="rpcInput" value="http://127.0.0.1:8545" />
+      </div>
+      <div class="meta-row">
+        <span>Contract Address</span>
+        <input type="text" id="contractInput" placeholder="0x..." />
+      </div>
+      <button id="refreshBtn" type="button">Refresh Live State</button>
+
+      <div class="info-box">
+        <p class="label">Last Owner Check-In</p>
+        <code id="lastCheckInOutput">—</code>
+
+        <p class="label">On-Chain Evidence keccak256 Hash</p>
+        <code id="onChainHashOutput">—</code>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Encrypted Evidence &amp; Key Status</h2>
+      <div class="info-box">
+        <p class="label">Published Encrypted File</p>
+        <div id="fileListOutput">
+          <code>sample-evidence.txt.enc (pending release manifest)</code>
+        </div>
+
+        <p class="label">Decryption Key</p>
+        <code id="publishedKeyOutput">LOCKED until contract stage reaches RELEASED</code>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+  <script src="./site.js"></script>
+</body>
+</html>
