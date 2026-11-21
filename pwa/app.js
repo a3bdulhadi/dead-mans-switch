@@ -416,3 +416,28 @@ runWizardBtn.addEventListener("click", async () => {
     runWizardBtn.textContent = "Run Setup Wizard";
   }
 });
+const pauseDaysInput = document.getElementById("pauseDaysInput");
+const pauseBtn = document.getElementById("pauseBtn");
+const pauseBox = document.getElementById("pauseBox");
+const pauseOutput = document.getElementById("pauseOutput");
+
+const savedPause = localStorage.getItem("dms_pause_note_v1");
+if (savedPause) {
+  pauseOutput.textContent = savedPause;
+  pauseBox.classList.remove("hidden");
+}
+
+pauseBtn.addEventListener("click", async () => {
+  const days = Number(pauseDaysInput.value.trim());
+  if (!Number.isInteger(days) || days < 1 || days > 7) {
+    statusEl.textContent = "Pause must be between 1 and 7 days";
+    return;
+  }
+
+  const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toLocaleString();
+  const note = `Travel pause announced for ${days} day(s) — resumes by ${until}`;
+  localStorage.setItem("dms_pause_note_v1", note);
+  pauseOutput.textContent = note;
+  pauseBox.classList.remove("hidden");
+  statusEl.textContent = `Travel pause set (${days} days)`;
+});
