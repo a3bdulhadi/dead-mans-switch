@@ -5,6 +5,7 @@ const deployment = require("./shared/deployment.json");
 const { sendAlert } = require("./notifier");
 const { buildReleaseBundle } = require("./releaseBuilder");
 const { processPacketQueue } = require("./queueRelayer");
+const { startBridgeServer } = require("./bridgeServer");
 
 const STAGE_NAMES = {
   0: "SAFE",
@@ -129,6 +130,7 @@ async function startWatcher() {
   console.log("Contract:", deployment.address);
   console.log("Agent Relayer Address:", agentWallet.address);
 
+  startBridgeServer({ contract, provider });
   // Run immediately once, then on interval
   await checkContractOnce(contract);
   setInterval(async () => {
