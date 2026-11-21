@@ -7,7 +7,8 @@
     "start": "node watcher.js",
     "test:offline": "node runAllTests.js offline",
     "test": "node runAllTests.js all",
-    "e2e": "node e2eDemo.js"
+    "e2e": "node e2eDemo.js",
+    "audit": "node auditCheck.js"
   },
   "keywords": [],
   "author": "",
