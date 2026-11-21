@@ -17,15 +17,18 @@ async function runWatcherSimulation() {
   const rpcUrl = process.env.RPC_URL || "http://127.0.0.1:8545";
   const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-  // Hardhat Account #0 (owner) and Account #1 (agent/relayer)
-  const ownerWallet = new ethers.Wallet(
+  // Hardhat Account #0 (owner) and Account #1 (agent/relayer) wrapped with NonceManager
+  const rawOwnerWallet = new ethers.Wallet(
     "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
     provider
   );
-  const agentWallet = new ethers.Wallet(
+  const ownerWallet = new ethers.NonceManager(rawOwnerWallet);
+
+  const rawAgentWallet = new ethers.Wallet(
     "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
     provider
   );
+  const agentWallet = new ethers.NonceManager(rawAgentWallet);
 
   const network = await provider.getNetwork();
   const chainId = Number(network.chainId);
@@ -36,6 +39,12 @@ async function runWatcherSimulation() {
   stateTracker.lastNotifiedStage = null;
   stateTracker.duressNotified = false;
   stateTracker.releaseFinalized = false;
+
+  // Clear any leftover duress flag from earlier test suites on the shared node
+  if (await contractAsAgent.duressTriggered()) {
+    const resetDuressTx = await contractAsOwner.clearDuress();
+    await resetDuressTx.wait();
+  }
 
   console.log("=== Day 16: Autonomous Watcher End-to-End Simulation ===");
   console.log("Contract:", deployment.address);
@@ -59,7 +68,7 @@ async function runWatcherSimulation() {
   const nonce = Number(await contractAsAgent.nonce());
   const blockBeforeDuress = await provider.getBlock("latest");
   const duressPacket = await createOfflineCheckInPacket({
-    wallet: ownerWallet,
+    wallet: rawOwnerWallet,
     chainId,
     verifyingContract: deployment.address,
     nonce,
@@ -70,7 +79,7 @@ async function runWatcherSimulation() {
   await relayOfflineCheckInPacket({
     packetJson: duressPacket,
     contract: contractAsAgent,
-    expectedOwner: ownerWallet.address,
+    expectedOwner: rawOwnerWallet.address,
     currentTimestamp: Number(blockBeforeDuress.timestamp),
   });
 

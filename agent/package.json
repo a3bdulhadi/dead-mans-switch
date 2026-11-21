@@ -2,9 +2,11 @@
   "name": "agent",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "watcher.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node watcher.js",
+    "test:offline": "node runAllTests.js offline",
+    "test": "node runAllTests.js all"
   },
   "keywords": [],
   "author": "",
