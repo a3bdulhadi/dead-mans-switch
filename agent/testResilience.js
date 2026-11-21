@@ -10,7 +10,7 @@ async function runResilienceTests() {
 
   // 1. Simulate 2 transient RPC failures followed by recovery on attempt 3
   let attempts = 0;
-  const flakyContract = {
+ const flakyContract = {
     getStage: async () => {
       attempts++;
       if (attempts < 3) {
@@ -21,8 +21,8 @@ async function runResilienceTests() {
     lastCheckIn: async () => 1700000000n,
     duressTriggered: async () => false,
     released: async () => false,
+    evidenceHash: async () => "0x" + "0".repeat(64),
   };
-
   await checkContractOnce(flakyContract);
   assert.strictEqual(attempts, 3);
   assert.strictEqual(stateTracker.lastNotifiedStage, 0);
