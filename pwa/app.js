@@ -321,13 +321,36 @@ runWizardBtn.addEventListener("click", async () => {
   const rpcUrl = rpcInput.value.trim();
   const contractAddress = contractInput.value.trim();
 
+  wizardOutput.classList.remove("wizard-ok", "wizard-err");
+
   if (!file) {
     statusEl.textContent = "Pick an evidence file for the Setup Wizard";
+    return;
+  }
+  if (file.size === 0) {
+    statusEl.textContent = "Selected file is empty (0 bytes)";
     return;
   }
   if (!rpcUrl || !contractAddress) {
     statusEl.textContent = "Enter RPC URL and Contract Address first";
     return;
+  }
+
+  let agentPubJwk = null;
+  const rawJwk = agentKeyInput.value.trim();
+  if (rawJwk) {
+    try {
+      agentPubJwk = JSON.parse(rawJwk);
+      if (agentPubJwk.kty !== "EC" || agentPubJwk.crv !== "P-256") {
+        throw new Error("Expected an EC P-256 JWK");
+      }
+    } catch (parseErr) {
+      wizardBox.classList.remove("hidden");
+      wizardOutput.classList.add("wizard-err");
+      wizardOutput.textContent = "Invalid Agent Public Key JWK — check the JSON format.";
+      statusEl.textContent = "Invalid Agent Public Key JWK";
+      return;
+    }
   }
 
   runWizardBtn.disabled = true;
@@ -346,11 +369,7 @@ runWizardBtn.addEventListener("click", async () => {
 
     // 2. Wrap key for Release Agent (ECDH + HKDF + AES-GCM)
     statusEl.textContent = "Wizard 2/4: Wrapping key...";
-    let agentPubJwk;
-    const rawJwk = agentKeyInput.value.trim();
-    if (rawJwk) {
-      agentPubJwk = JSON.parse(rawJwk);
-    } else {
+    if (!agentPubJwk) {
       const tempAgent = await crypto.subtle.generateKey(
         { name: "ECDH", namedCurve: "P-256" },
         true,
@@ -363,12 +382,16 @@ runWizardBtn.addEventListener("click", async () => {
 
     // 3. Store evidence hash on-chain
     statusEl.textContent = "Wizard 3/4: Storing hash on contract...";
-    const { txHash } = await registerEvidenceOnChain({
-      rpcUrl,
-      contractAddress,
-      evidenceHash: hash,
-    });
-    log.push(`3. Hash stored on-chain (Tx: ${txHash})`);
+    try {
+      const { txHash } = await registerEvidenceOnChain({
+        rpcUrl,
+        contractAddress,
+        evidenceHash: hash,
+      });
+      log.push(`3. Hash stored on-chain (Tx: ${txHash})`);
+    } catch (chainErr) {
+      throw new Error("Could not store hash on-chain — is Hardhat running?");
+    }
 
     // 4. Download .enc file and wrapped-key.json
     statusEl.textContent = "Wizard 4/4: Downloading files...";
@@ -379,13 +402,15 @@ runWizardBtn.addEventListener("click", async () => {
     downloadBytes(wrappedJson, "wrapped-key.json");
     log.push(`4. Downloaded ${file.name}.enc + wrapped-key.json`);
 
+    wizardOutput.classList.add("wizard-ok");
     wizardOutput.textContent = log.join("\n");
     statusEl.textContent = "Setup Wizard complete!";
   } catch (err) {
     console.error("Setup Wizard failed:", err);
     log.push(`Error: ${err.message || err}`);
+    wizardOutput.classList.add("wizard-err");
     wizardOutput.textContent = log.join("\n");
-    statusEl.textContent = "Setup Wizard failed — see console";
+    statusEl.textContent = err.message || "Setup Wizard failed";
   } finally {
     runWizardBtn.disabled = false;
     runWizardBtn.textContent = "Run Setup Wizard";

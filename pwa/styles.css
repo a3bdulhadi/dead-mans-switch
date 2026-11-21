@@ -235,3 +235,10 @@ code {
   padding: 0.5rem 0.9rem;
   font-size: 0.85rem;
 }
+.wizard-ok {
+  color: #6ee7b7;
+}
+
+.wizard-err {
+  color: #fca5a5;
+}
