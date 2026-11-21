@@ -20,6 +20,23 @@ const stateTracker = {
   releaseFinalized: false,
 };
 
+async function withRpcRetry(fn, retries = 3, baseDelayMs = 500) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        console.warn(`[Watcher] RPC attempt ${attempt}/${retries} failed (${err.message}). Retrying in ${delay}ms...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function checkContractOnce(contract) {
   // 0. Process any queued offline EIP-712 check-in packets first
   if (contract.runner && contract.runner.provider) {
@@ -28,12 +45,12 @@ async function checkContractOnce(contract) {
       provider: contract.runner.provider,
     });
   }
-  const stageNum = Number(await contract.getStage());
+  const stageNum = Number(await withRpcRetry(() => contract.getStage()));
   const stageName = STAGE_NAMES[stageNum] || "UNKNOWN";
-  const lastCheckIn = Number(await contract.lastCheckIn());
-  const duressTriggered = await contract.duressTriggered();
-  const isReleasedLatched = await contract.released();
-  const evidenceHash = await contract.evidenceHash();
+  const lastCheckIn = Number(await withRpcRetry(() => contract.lastCheckIn()));
+  const duressTriggered = await withRpcRetry(() => contract.duressTriggered());
+  const isReleasedLatched = await withRpcRetry(() => contract.released());
+  const evidenceHash = await withRpcRetry(() => contract.evidenceHash());
 
   console.log(
     `[Poll] Stage=${stageName} | lastCheckIn=${lastCheckIn} | duress=${duressTriggered} | latched=${isReleasedLatched}`
@@ -70,13 +87,15 @@ async function checkContractOnce(contract) {
     stateTracker.lastNotifiedStage = 0;
   }
 
- // 3. Automatic Release Latch at Day 5+ (Stage === RELEASED)
+  // 3. Automatic Release Latch at Day 5+ (Stage === RELEASED)
   if (stageNum === 2) {
     let releaseTxHash = null;
     if (!isReleasedLatched && !stateTracker.releaseFinalized) {
       console.log("[Action] Day 5 threshold reached! Calling finalizeRelease() on-chain...");
-      const tx = await contract.finalizeRelease();
-      const receipt = await tx.wait();
+      const receipt = await withRpcRetry(async () => {
+        const tx = await contract.finalizeRelease();
+        return await tx.wait();
+      });
       releaseTxHash = receipt.hash;
       stateTracker.releaseFinalized = true;
       console.log("[Action] Release permanently latched! Tx:", releaseTxHash);
@@ -130,16 +149,37 @@ async function startWatcher() {
   console.log("Contract:", deployment.address);
   console.log("Agent Relayer Address:", agentWallet.address);
 
-  startBridgeServer({ contract, provider });
+  const bridgeServer = startBridgeServer({ contract, provider });
+
   // Run immediately once, then on interval
   await checkContractOnce(contract);
-  setInterval(async () => {
+  const intervalId = setInterval(async () => {
     try {
       await checkContractOnce(contract);
     } catch (err) {
       console.error("[Poll Error]", err.message);
     }
   }, pollMs);
+
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n[Watcher] Received ${signal}. Shutting down gracefully...`);
+    clearInterval(intervalId);
+    if (bridgeServer) {
+      bridgeServer.close(() => {
+        console.log("[Bridge] HTTP Bridge closed cleanly.");
+        process.exit(0);
+      });
+      setTimeout(() => process.exit(0), 2000).unref();
+    } else {
+      process.exit(0);
+    }
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 if (require.main === module) {
@@ -149,4 +189,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkContractOnce, stateTracker };
+module.exports = { checkContractOnce, stateTracker, withRpcRetry };

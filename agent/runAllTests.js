@@ -1,7 +1,7 @@
 const { execFileSync } = require("child_process");
 const path = require("path");
 
-const offlineSuites = ["testPacket.js", "testReleaseBuilder.js", "testSecurity.js"];
+const offlineSuites = ["testPacket.js", "testReleaseBuilder.js", "testSecurity.js", "testResilience.js"];
 const liveNodeSuites = [
   "integrationTest.js",
   "testQueueRelayer.js",
