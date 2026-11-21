@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "description": "",
   "main": "watcher.js",
-  "scripts": {
+ "scripts": {
     "start": "node watcher.js",
     "test:offline": "node runAllTests.js offline",
     "test": "node runAllTests.js all",
     "e2e": "node e2eDemo.js",
-    "audit": "node auditCheck.js"
+    "audit": "node auditCheck.js",
+    "demo": "node livePresentation.js"
   },
   "keywords": [],
   "author": "",
