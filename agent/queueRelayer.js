@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+const seenPacketHashes = new Set();
 const { relayOfflineCheckInPacket } = require("./packetHelper");
 
 const DEFAULT_QUEUE_DIR = path.join(__dirname, "queue");
@@ -44,6 +46,16 @@ async function processPacketQueue({
     const fullPath = path.join(queueDir, file);
     try {
       const packetJson = fs.readFileSync(fullPath, "utf8");
+      const packetHash = crypto.createHash("sha256").update(packetJson).digest("hex");
+
+      if (seenPacketHashes.has(packetHash)) {
+        const dupPath = path.join(processedDir, `DUPLICATE_${Date.now()}_${file}`);
+        fs.renameSync(fullPath, dupPath);
+        failed++;
+        console.warn(`[Queue] Duplicate packet skipped: ${file}`);
+        continue;
+      }
+
       const result = await relayOfflineCheckInPacket({
         packetJson,
         contract,
@@ -51,6 +63,7 @@ async function processPacketQueue({
         currentTimestamp,
       });
 
+      seenPacketHashes.add(packetHash);
       const destPath = path.join(processedDir, `${Date.now()}_${file}`);
       fs.renameSync(fullPath, destPath);
       processed++;

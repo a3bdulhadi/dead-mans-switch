@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { processPacketQueue, DEFAULT_QUEUE_DIR } = require("./queueRelayer");
 const { saveLocalEscrow, DEFAULT_BUNDLE_PATH } = require("./releaseBuilder");
 
@@ -10,12 +11,16 @@ const STAGE_NAMES = {
   2: "RELEASED",
 };
 
+const RATE_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 60;
+
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "X-Content-Type-Options": "nosniff",
   });
   res.end(JSON.stringify(payload, null, 2));
 }
@@ -40,14 +45,51 @@ function readJsonBody(req) {
   });
 }
 
-function createBridgeServer({ contract, provider, queueDir = DEFAULT_QUEUE_DIR, bundlePath = DEFAULT_BUNDLE_PATH }) {
+function isAuthorized(req, authToken) {
+  if (!authToken) return true;
+  const header = req.headers["authorization"] || "";
+  const expected = `Bearer ${authToken}`;
+  const headerBuf = Buffer.from(header);
+  const expectedBuf = Buffer.from(expected);
+  if (headerBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(headerBuf, expectedBuf);
+}
+
+function createBridgeServer({
+  contract,
+  provider,
+  queueDir = DEFAULT_QUEUE_DIR,
+  bundlePath = DEFAULT_BUNDLE_PATH,
+  authToken = process.env.BRIDGE_AUTH_TOKEN || "",
+  maxRequestsPerWindow = MAX_REQUESTS_PER_WINDOW,
+}) {
+  const rateTracker = new Map();
+
   return http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") {
       return sendJson(res, 204, {});
     }
 
+    // Sliding-window rate limit check
+    const clientIp = req.socket.remoteAddress || "127.0.0.1";
+    const now = Date.now();
+    const record = rateTracker.get(clientIp) || { count: 0, windowStart: now };
+    if (now - record.windowStart > RATE_WINDOW_MS) {
+      record.count = 0;
+      record.windowStart = now;
+    }
+    record.count += 1;
+    rateTracker.set(clientIp, record);
+
+    if (record.count > maxRequestsPerWindow) {
+      return sendJson(res, 429, {
+        ok: false,
+        error: "Rate limit exceeded. Try again shortly.",
+      });
+    }
+
     try {
-      // 1. Live Switch Status
+      // 1. Live Switch Status (Public read-only telemetry)
       if (req.method === "GET" && req.url === "/status") {
         const stageNum = Number(await contract.getStage());
         const nonce = Number(await contract.nonce());
@@ -67,14 +109,29 @@ function createBridgeServer({ contract, provider, queueDir = DEFAULT_QUEUE_DIR, 
         });
       }
 
+      // Enforce Bearer token on sensitive/mutating endpoints when configured
+      if (!isAuthorized(req, authToken)) {
+        return sendJson(res, 401, {
+          ok: false,
+          error: "Unauthorized: valid Bearer token required",
+        });
+      }
+
       // 2. Relay Signed Offline EIP-712 Packet from PWA
       if (req.method === "POST" && req.url === "/relay") {
         const packetObj = await readJsonBody(req);
+        if (!packetObj || typeof packetObj !== "object" || !packetObj.signature) {
+          return sendJson(res, 400, {
+            ok: false,
+            error: "Malformed offline packet: missing signature",
+          });
+        }
+
         if (!fs.existsSync(queueDir)) {
           fs.mkdirSync(queueDir, { recursive: true });
         }
 
-        const fileName = `bridge_${Date.now()}.json`;
+        const fileName = `bridge_${Date.now()}_${crypto.randomBytes(3).toString("hex")}.json`;
         const filePath = path.join(queueDir, fileName);
         fs.writeFileSync(filePath, JSON.stringify(packetObj, null, 2), "utf8");
 
@@ -101,6 +158,13 @@ function createBridgeServer({ contract, provider, queueDir = DEFAULT_QUEUE_DIR, 
       // 3. Seed Local Key Escrow from PWA
       if (req.method === "POST" && req.url === "/escrow") {
         const body = await readJsonBody(req);
+        if (!body.evidenceHash || !body.keyBase64 || !body.ivBase64) {
+          return sendJson(res, 400, {
+            ok: false,
+            error: "Missing required escrow fields (evidenceHash, keyBase64, ivBase64)",
+          });
+        }
+
         const saved = saveLocalEscrow(body);
         return sendJson(res, 200, {
           ok: true,
@@ -140,7 +204,8 @@ function startBridgeServer(options) {
   const port = Number(process.env.BRIDGE_PORT || 8787);
   const server = createBridgeServer(options);
   server.listen(port, "127.0.0.1", () => {
-    console.log(`[Bridge] Local PWA HTTP Bridge listening on http://127.0.0.1:${port}`);
+    const authStatus = process.env.BRIDGE_AUTH_TOKEN ? "ENABLED" : "DISABLED (local open mode)";
+    console.log(`[Bridge] Local PWA HTTP Bridge listening on http://127.0.0.1:${port} | Auth: ${authStatus}`);
   });
   return server;
 }
