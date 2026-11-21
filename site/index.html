@@ -47,6 +47,23 @@
         <code id="publishedKeyOutput">LOCKED until contract stage reaches RELEASED</code>
       </div>
     </section>
+
+    <section class="card">
+      <h2>3. Verify Hash &amp; Decrypt Evidence</h2>
+      <div class="meta-row">
+        <span>Select Encrypted (.enc) File</span>
+        <input type="file" id="publicEncFile" />
+      </div>
+      <div class="meta-row">
+        <span>Decryption Key (Base64)</span>
+        <input type="text" id="publicKeyInput" placeholder="Auto-filled on RELEASED, or paste key..." />
+      </div>
+      <button id="publicDecryptBtn" type="button">Verify Hash &amp; Decrypt</button>
+      <div class="info-box">
+        <p class="label">Verification Status</p>
+        <code id="verifyStatus">Waiting for file...</code>
+      </div>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>

@@ -5,6 +5,7 @@ const SITE_ABI = [
 ];
 
 const STAGE_NAMES = ["SAFE", "ALERT", "RELEASED"];
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 const stageBadge = document.getElementById("stageBadge");
 const rpcInput = document.getElementById("rpcInput");
@@ -14,6 +15,13 @@ const lastCheckInOutput = document.getElementById("lastCheckInOutput");
 const onChainHashOutput = document.getElementById("onChainHashOutput");
 const fileListOutput = document.getElementById("fileListOutput");
 const publishedKeyOutput = document.getElementById("publishedKeyOutput");
+
+const publicEncFile = document.getElementById("publicEncFile");
+const publicKeyInput = document.getElementById("publicKeyInput");
+const publicDecryptBtn = document.getElementById("publicDecryptBtn");
+const verifyStatus = document.getElementById("verifyStatus");
+
+let currentOnChainHash = ZERO_HASH;
 
 function setStageBadge(stage) {
   stageBadge.className = "stage-badge";
@@ -32,9 +40,7 @@ async function loadDeploymentDefaults() {
       if (data.contractAddress) contractInput.value = data.contractAddress;
       if (data.rpcUrl) rpcInput.value = data.rpcUrl;
     }
-  } catch (_) {
-    // Optional file; user can paste contract address manually
-  }
+  } catch (_) {}
 }
 
 async function loadReleaseManifest(stage) {
@@ -49,12 +55,13 @@ async function loadReleaseManifest(stage) {
 
     if (stage === "RELEASED" && manifest.keyBase64) {
       publishedKeyOutput.textContent = manifest.keyBase64;
+      if (!publicKeyInput.value.trim()) {
+        publicKeyInput.value = manifest.keyBase64;
+      }
     } else {
       publishedKeyOutput.textContent = "LOCKED until contract stage reaches RELEASED";
     }
-  } catch (_) {
-    // No release manifest published yet
-  }
+  } catch (_) {}
 }
 
 async function refreshSite() {
@@ -72,13 +79,13 @@ async function refreshSite() {
     const stageNum = Number(await contract.getStage());
     const stage = STAGE_NAMES[stageNum] || "UNKNOWN";
     const lastUnix = Number(await contract.lastCheckIn());
-    const hash = await contract.evidenceHash();
+    currentOnChainHash = await contract.evidenceHash();
 
     setStageBadge(stage);
     lastCheckInOutput.textContent = lastUnix
       ? new Date(lastUnix * 1000).toLocaleString()
       : "—";
-    onChainHashOutput.textContent = hash;
+    onChainHashOutput.textContent = currentOnChainHash;
 
     await loadReleaseManifest(stage);
   } catch (err) {
@@ -86,6 +93,61 @@ async function refreshSite() {
     setStageBadge("NOT CONNECTED");
   }
 }
+
+async function decryptAesGcm(packedBytes, base64Key) {
+  const rawKey = Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, [
+    "decrypt",
+  ]);
+  const iv = packedBytes.slice(0, 12);
+  const ciphertext = packedBytes.slice(12);
+  const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  return new Uint8Array(plainBuf);
+}
+
+publicDecryptBtn.addEventListener("click", async () => {
+  const file = publicEncFile.files[0];
+  const keyBase64 = publicKeyInput.value.trim();
+
+  if (!file || !keyBase64) {
+    verifyStatus.textContent = "Select an .enc file and enter the Base64 key.";
+    return;
+  }
+
+  try {
+    verifyStatus.textContent = "Computing keccak256 hash...";
+    const encBytes = new Uint8Array(await file.arrayBuffer());
+    const actualHash = ethers.keccak256(encBytes);
+
+    if (currentOnChainHash && currentOnChainHash !== ZERO_HASH) {
+      if (actualHash.toLowerCase() !== currentOnChainHash.toLowerCase()) {
+        verifyStatus.textContent = `HASH MISMATCH! Expected ${currentOnChainHash}, got ${actualHash}`;
+        return;
+      }
+      verifyStatus.textContent = "Hash matches on-chain evidenceHash! Decrypting...";
+    } else {
+      verifyStatus.textContent = `Hash: ${actualHash} (not registered on-chain yet). Decrypting...`;
+    }
+
+    const plainBytes = await decryptAesGcm(encBytes, keyBase64);
+    const outName = file.name.endsWith(".enc")
+      ? file.name.slice(0, -4)
+      : `decrypted_${file.name}`;
+
+    const blob = new Blob([plainBytes], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = outName;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    verifyStatus.textContent = `Verified & decrypted ${outName} (${plainBytes.length} bytes)`;
+  } catch (err) {
+    console.error("Public decrypt failed:", err);
+    verifyStatus.textContent = "Decryption failed: wrong key or tampered file.";
+  }
+});
 
 refreshBtn.addEventListener("click", refreshSite);
 
