@@ -57,7 +57,13 @@
         <button id="genKeyBtn" type="button">Signing Key</button>
         <button id="refreshStageBtn" type="button">Refresh Stage</button>
       </div>
+      <label for="walletPassInput" class="label">Key Passphrase (min 6 chars)</label>
+      <input type="password" id="walletPassInput" placeholder="Enter passphrase to lock/unlock..." style="width: 100%; padding: 0.55rem 0.7rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;" />
 
+      <div class="btn-row">
+        <button id="lockWalletBtn" type="button">Lock Key</button>
+        <button id="unlockWalletBtn" type="button" class="secondary">Unlock Key</button>
+      </div>
       <div id="checkInBox" class="result hidden">
         <p class="result-label">Signer Address</p>
         <code id="signerAddressOutput"></code>

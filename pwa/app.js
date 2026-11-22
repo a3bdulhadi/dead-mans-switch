@@ -228,10 +228,44 @@ decryptBtn.addEventListener("click", async () => {
 
 genKeyBtn.addEventListener("click", () => {
   const wallet = getOrCreateSigningWallet();
+  if (!wallet) {
+    statusEl.textContent = "Signing key is locked — enter passphrase & click Unlock Key";
+    return;
+  }
   signerAddressOutput.textContent = wallet.address;
   sigOutput.textContent = "(ready to sign)";
   checkInBox.classList.remove("hidden");
   statusEl.textContent = "Signing key ready";
+});
+
+const walletPassInput = document.getElementById("walletPassInput");
+const lockWalletBtn = document.getElementById("lockWalletBtn");
+const unlockWalletBtn = document.getElementById("unlockWalletBtn");
+
+lockWalletBtn.addEventListener("click", async () => {
+  try {
+    const addr = await lockAndSaveWallet(walletPassInput.value);
+    walletPassInput.value = "";
+    signerAddressOutput.textContent = addr;
+    sigOutput.textContent = "Key encrypted with PBKDF2 + AES-GCM";
+    checkInBox.classList.remove("hidden");
+    statusEl.textContent = "Signing key locked with passphrase";
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
+});
+
+unlockWalletBtn.addEventListener("click", async () => {
+  try {
+    const addr = await unlockWallet(walletPassInput.value);
+    walletPassInput.value = "";
+    signerAddressOutput.textContent = addr;
+    sigOutput.textContent = "Key unlocked in memory";
+    checkInBox.classList.remove("hidden");
+    statusEl.textContent = "Signing key unlocked";
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
 });
 
 refreshStageBtn.addEventListener("click", refreshContractUI);
