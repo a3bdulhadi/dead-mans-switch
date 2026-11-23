@@ -34,9 +34,14 @@ const contractInput = document.getElementById("contractInput");
 const genKeyBtn = document.getElementById("genKeyBtn");
 const refreshStageBtn = document.getElementById("refreshStageBtn");
 const sendCheckInBtn = document.getElementById("sendCheckInBtn");
+const pinInput = document.getElementById("pinInput");
 const checkInBox = document.getElementById("checkInBox");
 const signerAddressOutput = document.getElementById("signerAddressOutput");
 const sigOutput = document.getElementById("sigOutput");
+
+const walletPassInput = document.getElementById("walletPassInput");
+const lockWalletBtn = document.getElementById("lockWalletBtn");
+const unlockWalletBtn = document.getElementById("unlockWalletBtn");
 
 const DEFAULT_CHAIN_ID = 31337;
 let lastCheckInUnix = 0;
@@ -238,10 +243,6 @@ genKeyBtn.addEventListener("click", () => {
   statusEl.textContent = "Signing key ready";
 });
 
-const walletPassInput = document.getElementById("walletPassInput");
-const lockWalletBtn = document.getElementById("lockWalletBtn");
-const unlockWalletBtn = document.getElementById("unlockWalletBtn");
-
 lockWalletBtn.addEventListener("click", async () => {
   try {
     const addr = await lockAndSaveWallet(walletPassInput.value);
@@ -275,6 +276,12 @@ window.addEventListener("online", syncPendingQueue);
 sendCheckInBtn.addEventListener("click", async () => {
   const rpcUrl = rpcInput.value.trim();
   const contractAddress = contractInput.value.trim();
+  const pin = pinInput.value.trim();
+
+  if (!pin) {
+    statusEl.textContent = "Enter your PIN first";
+    return;
+  }
   if (!rpcUrl || !contractAddress) {
     statusEl.textContent = "Enter RPC URL and Contract Address first";
     return;
@@ -284,15 +291,25 @@ sendCheckInBtn.addEventListener("click", async () => {
   localStorage.setItem(CONTRACT_STORAGE, contractAddress);
 
   sendCheckInBtn.disabled = true;
-  sendCheckInBtn.textContent = "Signing Check-In...";
+  sendCheckInBtn.textContent = "Verifying PIN...";
 
   try {
+    const pinMode = await verifyPin(pin);
+    pinInput.value = "";
+    if (pinMode === "invalid") {
+      statusEl.textContent = "Invalid PIN";
+      return;
+    }
+
+    const isDuress = pinMode === "duress";
+    sendCheckInBtn.textContent = "Signing Check-In...";
+
     const nonce = getNextCounter();
     const signed = await signCheckInTypedData({
       contractAddress,
       chainId: DEFAULT_CHAIN_ID,
       nonce,
-      duress: false,
+      duress: isDuress,
     });
     saveCounter(nonce);
 
@@ -340,10 +357,6 @@ sendCheckInBtn.addEventListener("click", async () => {
   }
 });
 
-refreshQueueCount();
-if (contractInput.value.trim()) {
-  refreshContractUI();
-}
 const wizardFileInput = document.getElementById("wizardFileInput");
 const agentKeyInput = document.getElementById("agentKeyInput");
 const runWizardBtn = document.getElementById("runWizardBtn");
@@ -393,7 +406,6 @@ runWizardBtn.addEventListener("click", async () => {
   const log = [];
 
   try {
-    // 1. Encrypt evidence
     statusEl.textContent = "Wizard 1/4: Encrypting file...";
     const plainBytes = new Uint8Array(await file.arrayBuffer());
     const { encryptedBytes, keyBase64 } = await encryptBytes(plainBytes);
@@ -401,7 +413,6 @@ runWizardBtn.addEventListener("click", async () => {
     log.push(`1. Encrypted (${encryptedBytes.length} bytes)`);
     log.push(`   Hash: ${hash}`);
 
-    // 2. Wrap key for Release Agent (ECDH + HKDF + AES-GCM)
     statusEl.textContent = "Wizard 2/4: Wrapping key...";
     if (!agentPubJwk) {
       const tempAgent = await crypto.subtle.generateKey(
@@ -414,7 +425,6 @@ runWizardBtn.addEventListener("click", async () => {
     const envelope = await wrapKeyForAgent(keyBase64, agentPubJwk);
     log.push("2. Wrapped AES key (ECDH+HKDF+AES-GCM)");
 
-    // 3. Store evidence hash on-chain
     statusEl.textContent = "Wizard 3/4: Storing hash on contract...";
     try {
       const { txHash } = await registerEvidenceOnChain({
@@ -427,7 +437,6 @@ runWizardBtn.addEventListener("click", async () => {
       throw new Error("Could not store hash on-chain — is Hardhat running?");
     }
 
-    // 4. Download .enc file and wrapped-key.json
     statusEl.textContent = "Wizard 4/4: Downloading files...";
     downloadBytes(encryptedBytes, `${file.name}.enc`);
     const wrappedJson = new TextEncoder().encode(
@@ -450,6 +459,7 @@ runWizardBtn.addEventListener("click", async () => {
     runWizardBtn.textContent = "Run Setup Wizard";
   }
 });
+
 const pauseDaysInput = document.getElementById("pauseDaysInput");
 const pauseBtn = document.getElementById("pauseBtn");
 const pauseBox = document.getElementById("pauseBox");
@@ -475,6 +485,7 @@ pauseBtn.addEventListener("click", async () => {
   pauseBox.classList.remove("hidden");
   statusEl.textContent = `Travel pause set (${days} days)`;
 });
+
 const demoModeToggle = document.getElementById("demoModeToggle");
 const demoControls = document.getElementById("demoControls");
 const ff2dBtn = document.getElementById("ff2dBtn");
@@ -514,3 +525,8 @@ ff3dBtn.addEventListener("click", async () => {
     statusEl.textContent = "Fast-forward failed — is Hardhat running?";
   }
 });
+
+refreshQueueCount();
+if (contractInput.value.trim()) {
+  refreshContractUI();
+}
