@@ -55,3 +55,8 @@ async function sendSignedCheckIn({ rpcUrl, contractAddress, nonce, deadline, dur
     nonce: state.nonce,
   };
 }
+async function fastForwardChain(rpcUrl, seconds) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  await provider.send("evm_increaseTime", [Number(seconds)]);
+  await provider.send("evm_mine", []);
+}

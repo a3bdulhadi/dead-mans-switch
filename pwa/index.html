@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-<section class="card">
+<section class="card dev-card">
       <h2>4. Travel Pause &amp; Backup (Day 27)</h2>
       <label for="pauseDaysInput" class="label">Pre-Announced Pause Days (max 7)</label>
       <input type="text" id="pauseDaysInput" value="3" />
@@ -45,7 +45,17 @@
       <button id="syncQueueBtn" type="button" class="secondary">Sync Queue</button>
     </div>
 
-    <section class="card">
+    <section class="card dev-card">
+      <div class="demo-bar">
+      <label class="demo-toggle">
+        <input type="checkbox" id="demoModeToggle" />
+        <span>Clean Demo Mode</span>
+      </label>
+      <div id="demoControls" class="demo-controls hidden">
+        <button id="ff2dBtn" type="button">+2d (ALERT)</button>
+        <button id="ff3dBtn" type="button" class="secondary">+3d (RELEASED)</button>
+      </div>
+    </div>
       <h2>Chain Settings</h2>
       <label for="rpcInput" class="label">Local Chain RPC URL</label>
       <input type="text" id="rpcInput" value="http://127.0.0.1:8545" />
@@ -73,7 +83,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card dev-card">
       <h2>0. Setup Wizard (Day 17)</h2>
       <label for="wizardFileInput" class="label">1. Choose Evidence File</label>
       <input type="file" id="wizardFileInput" />
@@ -102,7 +112,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card dev-card">
       <h2>2. Decrypt Evidence</h2>
       <label for="decryptFileInput" class="label">Select .enc file</label>
       <input type="file" id="decryptFileInput" />

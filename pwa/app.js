@@ -475,3 +475,42 @@ pauseBtn.addEventListener("click", async () => {
   pauseBox.classList.remove("hidden");
   statusEl.textContent = `Travel pause set (${days} days)`;
 });
+const demoModeToggle = document.getElementById("demoModeToggle");
+const demoControls = document.getElementById("demoControls");
+const ff2dBtn = document.getElementById("ff2dBtn");
+const ff3dBtn = document.getElementById("ff3dBtn");
+
+function applyDemoMode(enabled) {
+  document.querySelectorAll(".dev-card").forEach((el) => {
+    el.classList.toggle("demo-hidden", enabled);
+  });
+  demoControls.classList.toggle("hidden", !enabled);
+}
+
+demoModeToggle.addEventListener("change", () => {
+  applyDemoMode(demoModeToggle.checked);
+});
+
+ff2dBtn.addEventListener("click", async () => {
+  const rpcUrl = rpcInput.value.trim();
+  if (!rpcUrl) return;
+  try {
+    await fastForwardChain(rpcUrl, 2 * 24 * 60 * 60 + 60);
+    await refreshContractUI();
+    statusEl.textContent = "Demo: fast-forwarded +2 days";
+  } catch (err) {
+    statusEl.textContent = "Fast-forward failed — is Hardhat running?";
+  }
+});
+
+ff3dBtn.addEventListener("click", async () => {
+  const rpcUrl = rpcInput.value.trim();
+  if (!rpcUrl) return;
+  try {
+    await fastForwardChain(rpcUrl, 3 * 24 * 60 * 60 + 60);
+    await refreshContractUI();
+    statusEl.textContent = "Demo: fast-forwarded +3 days";
+  } catch (err) {
+    statusEl.textContent = "Fast-forward failed — is Hardhat running?";
+  }
+});
