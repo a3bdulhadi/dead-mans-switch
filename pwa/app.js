@@ -92,7 +92,7 @@ function updateStageBadge(stage) {
   } else {
     stageBadge.classList.add("stage-unknown");
   }
-  stageBadge.textContent = `STAGE: ${stage}`;
+  stageBadge.textContent = stage;
 }
 
 async function refreshQueueCount() {
@@ -115,7 +115,7 @@ async function refreshContractUI() {
   const rpcUrl = rpcInput.value.trim();
   const contractAddress = contractInput.value.trim();
   if (!rpcUrl || !contractAddress) {
-    statusEl.textContent = "Enter RPC URL and Contract Address";
+    statusEl.textContent = "Enter RPC URL and Contract Address in Settings";
     return;
   }
 
@@ -123,14 +123,14 @@ async function refreshContractUI() {
   localStorage.setItem(CONTRACT_STORAGE, contractAddress);
 
   try {
-    statusEl.textContent = "Reading stage...";
+    statusEl.textContent = "Connecting to chain...";
     const { stage, lastCheckIn } = await fetchContractStage(rpcUrl, contractAddress);
     updateStageBadge(stage);
     updateStatusGrid(lastCheckIn);
     statusEl.textContent = `Connected (${stage})`;
   } catch (err) {
     console.error("Stage fetch failed:", err);
-    updateStageBadge("NOT CONNECTED");
+    updateStageBadge("Not Connected");
     updateStatusGrid(0);
     statusEl.textContent = "Offline or Hardhat not running";
   }
@@ -202,7 +202,7 @@ decryptBtn.addEventListener("click", async () => {
   const expectedHash = expectedHashInput.value.trim();
 
   if (!file || !keyBase64) {
-    statusEl.textContent = "Select a .enc file and paste the AES key";
+    statusEl.textContent = "Select a .enc file and paste the decryption key";
     return;
   }
 
@@ -234,7 +234,7 @@ decryptBtn.addEventListener("click", async () => {
 genKeyBtn.addEventListener("click", () => {
   const wallet = getOrCreateSigningWallet();
   if (!wallet) {
-    statusEl.textContent = "Signing key is locked — enter passphrase & click Unlock Key";
+    statusEl.textContent = "Signing key is locked";
     return;
   }
   signerAddressOutput.textContent = wallet.address;
@@ -283,7 +283,7 @@ sendCheckInBtn.addEventListener("click", async () => {
     return;
   }
   if (!rpcUrl || !contractAddress) {
-    statusEl.textContent = "Enter RPC URL and Contract Address first";
+    statusEl.textContent = "Enter Blockchain URL and Contract Address in Settings first";
     return;
   }
 
@@ -331,7 +331,7 @@ sendCheckInBtn.addEventListener("click", async () => {
       await enqueueCheckIn(payload);
       await refreshQueueCount();
       sigOutput.textContent = `Queued offline (nonce ${nonce})`;
-      statusEl.textContent = `Offline — check-in (nonce ${nonce}) queued in IndexedDB`;
+      statusEl.textContent = `Offline — check-in (nonce ${nonce}) queued`;
       return;
     }
 
@@ -341,12 +341,12 @@ sendCheckInBtn.addEventListener("click", async () => {
       updateStageBadge(receipt.stage);
       updateStatusGrid(receipt.lastCheckIn);
       sigOutput.textContent = `Nonce: ${nonce} | Tx: ${receipt.txHash}`;
-      statusEl.textContent = `Check-in (nonce ${nonce}) confirmed (${receipt.stage})`;
+      statusEl.textContent = `Check-in confirmed (${receipt.stage})`;
     } catch (netErr) {
       await enqueueCheckIn(payload);
       await refreshQueueCount();
       sigOutput.textContent = `Queued offline (nonce ${nonce})`;
-      statusEl.textContent = `Chain unreachable — check-in (nonce ${nonce}) queued`;
+      statusEl.textContent = `Chain unreachable — check-in queued`;
     }
   } catch (err) {
     console.error("Check-in error:", err);
@@ -371,7 +371,7 @@ runWizardBtn.addEventListener("click", async () => {
   wizardOutput.classList.remove("wizard-ok", "wizard-err");
 
   if (!file) {
-    statusEl.textContent = "Pick an evidence file for the Setup Wizard";
+    statusEl.textContent = "Choose a file to protect first";
     return;
   }
   if (file.size === 0) {
@@ -379,7 +379,7 @@ runWizardBtn.addEventListener("click", async () => {
     return;
   }
   if (!rpcUrl || !contractAddress) {
-    statusEl.textContent = "Enter RPC URL and Contract Address first";
+    statusEl.textContent = "Enter Blockchain URL and Contract Address in Settings first";
     return;
   }
 
@@ -401,19 +401,19 @@ runWizardBtn.addEventListener("click", async () => {
   }
 
   runWizardBtn.disabled = true;
-  runWizardBtn.textContent = "Running Setup...";
+  runWizardBtn.textContent = "Protecting File...";
   wizardBox.classList.remove("hidden");
   const log = [];
 
   try {
-    statusEl.textContent = "Wizard 1/4: Encrypting file...";
+    statusEl.textContent = "Step 1/4: Encrypting file...";
     const plainBytes = new Uint8Array(await file.arrayBuffer());
     const { encryptedBytes, keyBase64 } = await encryptBytes(plainBytes);
     const hash = hashEncryptedBytes(encryptedBytes);
     log.push(`1. Encrypted (${encryptedBytes.length} bytes)`);
     log.push(`   Hash: ${hash}`);
 
-    statusEl.textContent = "Wizard 2/4: Wrapping key...";
+    statusEl.textContent = "Step 2/4: Wrapping key...";
     if (!agentPubJwk) {
       const tempAgent = await crypto.subtle.generateKey(
         { name: "ECDH", namedCurve: "P-256" },
@@ -425,7 +425,7 @@ runWizardBtn.addEventListener("click", async () => {
     const envelope = await wrapKeyForAgent(keyBase64, agentPubJwk);
     log.push("2. Wrapped AES key (ECDH+HKDF+AES-GCM)");
 
-    statusEl.textContent = "Wizard 3/4: Storing hash on contract...";
+    statusEl.textContent = "Step 3/4: Registering hash on-chain...";
     try {
       const { txHash } = await registerEvidenceOnChain({
         rpcUrl,
@@ -437,7 +437,7 @@ runWizardBtn.addEventListener("click", async () => {
       throw new Error("Could not store hash on-chain — is Hardhat running?");
     }
 
-    statusEl.textContent = "Wizard 4/4: Downloading files...";
+    statusEl.textContent = "Step 4/4: Downloading files...";
     downloadBytes(encryptedBytes, `${file.name}.enc`);
     const wrappedJson = new TextEncoder().encode(
       JSON.stringify({ fileName: `${file.name}.enc`, evidenceHash: hash, envelope }, null, 2)
@@ -447,16 +447,16 @@ runWizardBtn.addEventListener("click", async () => {
 
     wizardOutput.classList.add("wizard-ok");
     wizardOutput.textContent = log.join("\n");
-    statusEl.textContent = "Setup Wizard complete!";
+    statusEl.textContent = "File protected & registered!";
   } catch (err) {
     console.error("Setup Wizard failed:", err);
     log.push(`Error: ${err.message || err}`);
     wizardOutput.classList.add("wizard-err");
     wizardOutput.textContent = log.join("\n");
-    statusEl.textContent = err.message || "Setup Wizard failed";
+    statusEl.textContent = err.message || "Protection failed";
   } finally {
     runWizardBtn.disabled = false;
-    runWizardBtn.textContent = "Run Setup Wizard";
+    runWizardBtn.textContent = "Encrypt & Protect File";
   }
 });
 
@@ -479,7 +479,7 @@ pauseBtn.addEventListener("click", async () => {
   }
 
   const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toLocaleString();
-  const note = `Travel pause announced for ${days} day(s) — resumes by ${until}`;
+  const note = `Travel pause set for ${days} day(s) — resumes by ${until}`;
   localStorage.setItem("dms_pause_note_v1", note);
   pauseOutput.textContent = note;
   pauseBox.classList.remove("hidden");
@@ -491,15 +491,8 @@ const demoControls = document.getElementById("demoControls");
 const ff2dBtn = document.getElementById("ff2dBtn");
 const ff3dBtn = document.getElementById("ff3dBtn");
 
-function applyDemoMode(enabled) {
-  document.querySelectorAll(".dev-card").forEach((el) => {
-    el.classList.toggle("demo-hidden", enabled);
-  });
-  demoControls.classList.toggle("hidden", !enabled);
-}
-
 demoModeToggle.addEventListener("change", () => {
-  applyDemoMode(demoModeToggle.checked);
+  demoControls.classList.toggle("hidden", !demoModeToggle.checked);
 });
 
 ff2dBtn.addEventListener("click", async () => {
@@ -508,9 +501,9 @@ ff2dBtn.addEventListener("click", async () => {
   try {
     await fastForwardChain(rpcUrl, 2 * 24 * 60 * 60 + 60);
     await refreshContractUI();
-    statusEl.textContent = "Demo: fast-forwarded +2 days";
+    statusEl.textContent = "Demo: skipped +2 days (ALERT)";
   } catch (err) {
-    statusEl.textContent = "Fast-forward failed — is Hardhat running?";
+    statusEl.textContent = "Skip failed — is Hardhat running?";
   }
 });
 
@@ -520,12 +513,82 @@ ff3dBtn.addEventListener("click", async () => {
   try {
     await fastForwardChain(rpcUrl, 3 * 24 * 60 * 60 + 60);
     await refreshContractUI();
-    statusEl.textContent = "Demo: fast-forwarded +3 days";
+    statusEl.textContent = "Demo: skipped +3 days (RELEASED)";
   } catch (err) {
-    statusEl.textContent = "Fast-forward failed — is Hardhat running?";
+    statusEl.textContent = "Skip failed — is Hardhat running?";
   }
 });
 
+// Top-bar Tab Switcher
+document.querySelectorAll(".side-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".side-tab").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+  });
+});
+
+// Login / Vault Gate
+const loginScreen = document.getElementById("loginScreen");
+const appShell = document.getElementById("appShell");
+const loginTitle = document.getElementById("loginTitle");
+const loginSub = document.getElementById("loginSub");
+const loginPassInput = document.getElementById("loginPassInput");
+const loginError = document.getElementById("loginError");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+
+function updateLoginLabels() {
+  if (hasEncryptedWallet()) {
+    loginTitle.textContent = "Sign in to your vault";
+    loginSub.textContent = "Enter your vault passphrase to unlock your signing key.";
+    loginBtn.textContent = "Sign In";
+  } else {
+    loginTitle.textContent = "Create your vault passphrase";
+    loginSub.textContent = "First-time setup: choose a passphrase (min 6 chars) to protect your key.";
+    loginBtn.textContent = "Create & Sign In";
+  }
+}
+
+async function handleLogin() {
+  const pass = loginPassInput.value;
+  loginError.classList.add("hidden");
+  loginBtn.disabled = true;
+  loginBtn.textContent = "Unlocking...";
+
+  try {
+    const addr = hasEncryptedWallet()
+      ? await unlockWallet(pass)
+      : await lockAndSaveWallet(pass);
+
+    loginPassInput.value = "";
+    signerAddressOutput.textContent = addr;
+    sigOutput.textContent = "Vault unlocked";
+    checkInBox.classList.remove("hidden");
+
+    loginScreen.classList.add("hidden");
+    appShell.classList.remove("hidden");
+    statusEl.textContent = "Signed in — vault unlocked";
+  } catch (err) {
+    loginError.textContent = err.message || "Invalid passphrase";
+    loginError.classList.remove("hidden");
+  } finally {
+    loginBtn.disabled = false;
+    updateLoginLabels();
+  }
+}
+
+loginBtn.addEventListener("click", handleLogin);
+loginPassInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") handleLogin();
+});
+
+logoutBtn.addEventListener("click", () => {
+  location.reload();
+});
+
+updateLoginLabels();
 refreshQueueCount();
 if (contractInput.value.trim()) {
   refreshContractUI();

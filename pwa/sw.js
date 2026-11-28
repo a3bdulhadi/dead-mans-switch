@@ -1,4 +1,4 @@
-const CACHE_NAME = "dms-cache-v5";
+const CACHE_NAME = "dms-cache-v6";
 const APP_SHELL = [
   "./",
   "./index.html",

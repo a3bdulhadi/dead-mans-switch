@@ -3,136 +3,208 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChronoSeal — Dead Man's Switch</title>
+  <title>ChronoSeal</title>
   <link rel="manifest" href="./manifest.webmanifest" />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#ffffff" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main>
-    <h1>Dead Man's Switch</h1>
-    <p id="status">Loading...</p>
-    <div id="stageBadge" class="stage-badge stage-unknown">STAGE: NOT CONNECTED</div>
-
-    <section class="status-grid">
-      <div class="stat-box">
-        <span class="stat-label">Last Check-In</span>
-        <strong id="lastCheckInText">—</strong>
+  <!-- LOGIN SCREEN -->
+  <section id="loginScreen" class="login-wrapper">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="./icons/icon-192.png" alt="ChronoSeal" class="brand-logo" />
+        <div>
+          <h1>ChronoSeal</h1>
+          <p class="sub">Dead Man's Switch Vault</p>
+        </div>
       </div>
-      <div class="stat-box">
-        <span class="stat-label">Time Until ALERT</span>
-        <strong id="countdownText">—</strong>
-      </div>
-    </section>
 
-    <input type="password" id="pinInput" placeholder="Enter PIN (1234 normal / 9999 duress)" style="margin-bottom: 0.65rem; width: 100%; padding: 0.65rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;" />
-    <button id="sendCheckInBtn" type="button" class="hero-btn">Check In Now</button>
+      <h2 id="loginTitle">Sign in to your vault</h2>
+      <p id="loginSub" class="sub">Enter your vault passphrase to unlock your signing key.</p>
 
-    <div class="queue-row">
-      <span id="queueText">Queued: 0</span>
-      <button id="syncQueueBtn" type="button" class="secondary">Sync Queue</button>
-    </div>
+      <label for="loginPassInput" class="label">Vault Passphrase (min 6 characters)</label>
+      <input type="password" id="loginPassInput" placeholder="Enter passphrase..." />
+      <p id="loginError" class="login-error hidden"></p>
 
-    <div class="demo-bar">
-      <label class="demo-toggle">
-        <input type="checkbox" id="demoModeToggle" />
-        <span>Clean Demo Mode</span>
-      </label>
-      <div id="demoControls" class="demo-controls hidden">
-        <button id="ff2dBtn" type="button">+2d (ALERT)</button>
-        <button id="ff3dBtn" type="button" class="secondary">+3d (RELEASED)</button>
+      <button id="loginBtn" type="button" class="btn-primary">Sign In</button>
+
+      <div class="login-footer">
+        <a href="../site/index.html" class="nav-link">Open Public Archive &rarr;</a>
       </div>
     </div>
+  </section>
 
-    <section class="card dev-card">
-      <h2>Chain Settings</h2>
-      <label for="rpcInput" class="label">Local Chain RPC URL</label>
-      <input type="text" id="rpcInput" value="http://127.0.0.1:8545" />
+  <!-- MAIN APP (hidden until signed in) -->
+  <div id="appShell" class="hidden">
+    <header class="navbar">
+      <div class="nav-inner">
+        <div class="brand">
+          <img src="./icons/icon-192.png" alt="ChronoSeal" class="brand-logo" />
+          <span class="brand-name">ChronoSeal</span>
+        </div>
 
-      <label for="contractInput" class="label">Deployed Contract Address</label>
-      <input type="text" id="contractInput" placeholder="0x..." />
+        <nav class="nav-tabs">
+          <button type="button" class="side-tab active" data-tab="tab-dashboard">Check-In</button>
+          <button type="button" class="side-tab" data-tab="tab-vault">Vault</button>
+          <button type="button" class="side-tab" data-tab="tab-chain">Settings</button>
+          <a href="../site/index.html" class="nav-link">Public Archive &rarr;</a>
+        </nav>
 
-      <div class="btn-row">
-        <button id="genKeyBtn" type="button">Signing Key</button>
-        <button id="refreshStageBtn" type="button">Refresh Stage</button>
+        <div class="nav-right" style="display:flex; align-items:center; gap:0.65rem;">
+          <div id="stageBadge" class="stage-badge stage-unknown">Not Connected</div>
+          <button id="logoutBtn" type="button" class="btn-outline" style="padding:0.4rem 0.8rem; font-size:0.82rem;">Lock &amp; Sign Out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <p id="status" class="status-banner">Loading...</p>
+
+      <!-- TAB 1: CHECK-IN -->
+      <div id="tab-dashboard" class="tab-panel active">
+        <section class="hero-card">
+          <div class="hero-top">
+            <div>
+              <h1>Daily Check-In</h1>
+              <p class="sub">Confirm you are safe to keep your sealed files private.</p>
+            </div>
+            <div class="stats-inline">
+              <div class="mini-stat">
+                <span>Last Check-In</span>
+                <strong id="lastCheckInText">—</strong>
+              </div>
+              <div class="mini-stat">
+                <span>Next Alert In</span>
+                <strong id="countdownText">—</strong>
+              </div>
+              <div class="mini-stat">
+                <span>Offline Queue</span>
+                <strong id="queueText">Queued: 0</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="checkin-bar">
+            <input type="password" id="pinInput" placeholder="Enter PIN (1234 normal · 9999 duress)" />
+            <button id="sendCheckInBtn" type="button" class="btn-primary">Check In Now</button>
+            <button id="syncQueueBtn" type="button" class="btn-outline">Sync</button>
+          </div>
+
+          <div class="demo-bar">
+            <label class="demo-toggle">
+              <input type="checkbox" id="demoModeToggle" />
+              <span>Demo Controls</span>
+            </label>
+            <div id="demoControls" class="demo-controls hidden">
+              <button id="ff2dBtn" type="button" class="btn-outline">Skip +2 Days (Alert)</button>
+              <button id="ff3dBtn" type="button" class="btn-outline">Skip +3 Days (Release)</button>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <label for="walletPassInput" class="label">Key Passphrase (min 6 chars)</label>
-      <input type="password" id="walletPassInput" placeholder="Enter passphrase to lock/unlock..." style="width: 100%; padding: 0.55rem 0.7rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;" />
+      <!-- TAB 2: VAULT -->
+      <div id="tab-vault" class="tab-panel">
+        <div class="grid-2">
+          <section class="card dev-card">
+            <h2>Protect a New File</h2>
+            <p class="sub">Locks your file locally and registers its fingerprint on the blockchain.</p>
+            <label for="wizardFileInput" class="label">Choose file</label>
+            <input type="file" id="wizardFileInput" />
 
-      <div class="btn-row">
-        <button id="lockWalletBtn" type="button">Lock Key</button>
-        <button id="unlockWalletBtn" type="button" class="secondary">Unlock Key</button>
+            <label for="agentKeyInput" class="label">Agent Public Key (optional)</label>
+            <input type="text" id="agentKeyInput" placeholder="Leave blank for test mode" />
+
+            <button id="runWizardBtn" type="button" class="btn-primary">Encrypt &amp; Protect File</button>
+
+            <div id="wizardBox" class="result hidden">
+              <code id="wizardOutput"></code>
+            </div>
+          </section>
+
+          <section class="card dev-card">
+            <h2>Open an Encrypted File</h2>
+            <p class="sub">Verify the file has not been altered and decrypt it in your browser.</p>
+            <label for="decryptFileInput" class="label">Encrypted (.enc) file</label>
+            <input type="file" id="decryptFileInput" />
+
+            <label for="decryptKeyInput" class="label">Decryption Key</label>
+            <input type="text" id="decryptKeyInput" placeholder="Paste key..." />
+
+            <label for="expectedHashInput" class="label">Verification Hash (optional)</label>
+            <input type="text" id="expectedHashInput" placeholder="0x..." />
+
+            <button id="decryptBtn" type="button" class="btn-primary">Verify &amp; Decrypt</button>
+          </section>
+        </div>
+
+        <section class="card dev-card">
+          <h2>Quick Encrypt (Testing Only)</h2>
+          <div class="inline-form">
+            <input type="file" id="fileInput" />
+            <button id="encryptBtn" type="button" class="btn-outline">Encrypt &amp; Download</button>
+          </div>
+          <div id="resultBox" class="result hidden">
+            <p class="result-label">File Hash</p>
+            <code id="hashOutput"></code>
+            <p class="result-label">One-Time Key</p>
+            <code id="keyOutput"></code>
+          </div>
+        </section>
       </div>
 
-      <div id="checkInBox" class="result hidden">
-        <p class="result-label">Signer Address</p>
-        <code id="signerAddressOutput"></code>
+      <!-- TAB 3: SETTINGS -->
+      <div id="tab-chain" class="tab-panel">
+        <div class="grid-2">
+          <section class="card dev-card">
+            <h2>Network Connection</h2>
+            <label for="rpcInput" class="label">Blockchain URL</label>
+            <input type="text" id="rpcInput" value="http://127.0.0.1:8545" />
 
-        <p class="result-label">Latest Check-In &amp; Transaction</p>
-        <code id="sigOutput"></code>
+            <label for="contractInput" class="label">Contract Address</label>
+            <input type="text" id="contractInput" placeholder="0x..." />
+
+            <div class="btn-row">
+              <button id="refreshStageBtn" type="button" class="btn-primary">Connect &amp; Refresh</button>
+              <button id="genKeyBtn" type="button" class="btn-outline">Check Key Status</button>
+            </div>
+          </section>
+
+          <section class="card dev-card">
+            <h2>Key Passphrase</h2>
+            <p class="sub">Lock or unlock your signing key on this device.</p>
+            <label for="walletPassInput" class="label">Passphrase (min 6 characters)</label>
+            <input type="password" id="walletPassInput" placeholder="Enter passphrase..." />
+
+            <div class="btn-row">
+              <button id="lockWalletBtn" type="button" class="btn-outline">Lock Key</button>
+              <button id="unlockWalletBtn" type="button" class="btn-primary">Unlock Key</button>
+            </div>
+
+            <div id="checkInBox" class="result hidden">
+              <p class="result-label">Signer Address</p>
+              <code id="signerAddressOutput"></code>
+              <p class="result-label">Status</p>
+              <code id="sigOutput"></code>
+            </div>
+          </section>
+        </div>
+
+        <section class="card dev-card">
+          <h2>Travel Pause &amp; Backup</h2>
+          <div class="inline-form">
+            <input type="text" id="pauseDaysInput" value="3" placeholder="Days (1-7)" />
+            <button id="pauseBtn" type="button" class="btn-outline">Set Travel Pause</button>
+            <a href="./vouch.html" class="btn-outline link-btn">Trustee Vouch</a>
+          </div>
+          <div id="pauseBox" class="result hidden">
+            <code id="pauseOutput"></code>
+          </div>
+        </section>
       </div>
-    </section>
-
-    <section class="card dev-card">
-      <h2>0. Setup Wizard (Day 17)</h2>
-      <label for="wizardFileInput" class="label">1. Choose Evidence File</label>
-      <input type="file" id="wizardFileInput" />
-
-      <label for="agentKeyInput" class="label">2. Agent Public Key JWK (leave blank for local test key)</label>
-      <input type="text" id="agentKeyInput" placeholder='{"kty":"EC",...} (optional)' />
-
-      <button id="runWizardBtn" type="button">Run Setup Wizard</button>
-
-      <div id="wizardBox" class="result hidden">
-        <p class="result-label">Setup Progress</p>
-        <code id="wizardOutput"></code>
-      </div>
-    </section>
-
-    <section class="card dev-card">
-      <h2>1. Encrypt Evidence</h2>
-      <label for="fileInput" class="label">Select evidence file</label>
-      <input type="file" id="fileInput" />
-      <button id="encryptBtn" type="button">Encrypt &amp; Download</button>
-
-      <div id="resultBox" class="result hidden">
-        <p class="result-label">Encrypted File keccak256 Hash</p>
-        <code id="hashOutput"></code>
-
-        <p class="result-label">One-Time AES Key (Base64 — for testing)</p>
-        <code id="keyOutput"></code>
-      </div>
-    </section>
-
-    <section class="card dev-card">
-      <h2>2. Decrypt Evidence</h2>
-      <label for="decryptFileInput" class="label">Select .enc file</label>
-      <input type="file" id="decryptFileInput" />
-
-      <label for="decryptKeyInput" class="label">AES Key (Base64)</label>
-      <input type="text" id="decryptKeyInput" placeholder="Paste Base64 key..." />
-
-      <label for="expectedHashInput" class="label">Expected keccak256 Hash (optional)</label>
-      <input type="text" id="expectedHashInput" placeholder="0x... (leave blank to skip)" />
-
-      <button id="decryptBtn" type="button" class="secondary">Verify &amp; Decrypt</button>
-    </section>
-
-    <section class="card dev-card">
-      <h2>4. Travel Pause &amp; Backup (Day 27)</h2>
-      <label for="pauseDaysInput" class="label">Pre-Announced Pause Days (max 7)</label>
-      <input type="text" id="pauseDaysInput" value="3" />
-
-      <button id="pauseBtn" type="button">Announce Travel Pause</button>
-      <a href="./vouch.html" style="color:#38bdf8; font-size:0.85rem; text-align:center; margin-top:0.25rem;">Open Trustee Vouch Page</a>
-
-      <div id="pauseBox" class="result hidden">
-        <p class="result-label">Active Travel Pause</p>
-        <code id="pauseOutput"></code>
-      </div>
-    </section>
-  </main>
+    </main>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
   <script src="./crypto.js"></script>
